@@ -1,6 +1,34 @@
 using CairoMakie
-using StatsBase  # for fit(Histogram)
+using StatsBase 
 
+
+"""
+    quick_hist(v::Vector{T}, xlab::String, ylab::String, title::String) where T <: Real
+
+Create a histogram plot with customizable labels and title.
+
+# Arguments
+- `v::Vector{T}`: Vector of numeric data to create histogram from
+- `xlab::String`: Label for the x-axis
+- `ylab::String`: Label for the y-axis  
+- `title::String`: Title for the plot
+
+# Returns
+- `fig::Figure`: Makie figure object containing the histogram
+
+# Examples
+```julia
+data = randn(1000)
+fig = quick_hist(data, "Values", "Frequency", "Normal Distribution")
+save("histogram.pdf", fig)
+```
+
+# Notes
+- Automatically handles missing values by skipping them
+- Uses 30 bins by default
+- Colors bars blue for negative values and red for non-negative values
+- Returns a figure object that can be saved to various formats
+"""
 function quick_hist(v::Vector{T}, xlab::String, ylab::String, title::String) where T <: Real
     data    = collect(skipmissing(v))
     h       = fit(Histogram, data; nbins = 30)
@@ -25,7 +53,7 @@ function quick_hist(v::Vector{T}, xlab::String, ylab::String, title::String) whe
     strokewidth = 1,
     )
         
-    display(fig)
+    return fig
 end
 
 export quick_hist
