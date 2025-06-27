@@ -12,9 +12,9 @@ Display a discrete vertical colorbar using ColorBrewer palettes.
 
 # Examples
 ```julia
-plot_colorbar("Greens", 5)
-plot_colorbar("Blues", 9)
-plot_colorbar("RdYlBu", 7)
+simple_colorbar("Greens", 5)
+simple_colorbar("Blues", 9)
+simple_colorbar("RdYlBu", 7)
 
 ```
 """
@@ -23,7 +23,7 @@ function plot_colorbar(palette_name::String, n_colors::Int)
     colors = palette(palette_name, n_colors)
     
     # Create figure
-    fig = Figure(resolution = (400, 300))
+    fig = Figure(size = (400, 300))
     
     # Create a simple matrix with discrete values 1 to n_colors
     data = reshape(1:n_colors, 1, n_colors)
