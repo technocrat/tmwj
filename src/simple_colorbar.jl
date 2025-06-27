@@ -18,7 +18,7 @@ simple_colorbar("RdYlBu", 7)
 
 ```
 """
-function plot_colorbar(palette_name::String, n_colors::Int)
+function simple_colorbar(palette_name::String, n_colors::Int)
     # Get the color palette
     colors = palette(palette_name, n_colors)
     
