@@ -2,11 +2,19 @@ using CairoMakie
 using ColorSchemes
 
 """
-    continuous_colorbar(; colormap=:viridis, label="Value", size=(400, 300))
+    continuous_colorbar(colormap=:viridis; label=nothing, size=(400, 300))
 Display a heatmap with a continuous colorbar using the specified colormap.
 - `colormap`: Can be a ColorSchemes symbol (e.g., :viridis) or a custom vector of colors.
 """
-function continuous_colorbar(; colormap=:viridis, label="Value", size=(400, 300))
+function continuous_colorbar(colormap=:viridis; label=nothing, size=(400, 300))
+    # Set default label based on colormap
+    if label === nothing
+        if typeof(colormap) <: Symbol
+            label = string(colormap)
+        else
+            label = "custom"
+        end
+    end
     # Prepend 'Continuous: ' to label if not already present
     if !occursin(r"continuous"i, label)
         label = "Continuous: " * label
@@ -38,11 +46,19 @@ function continuous_colorbar(; colormap=:viridis, label="Value", size=(400, 300)
 end
 
 """
-    discrete_colorbar(; colormap=:Blues_9, label="Value", size=(400, 300))
+    discrete_colorbar(colormap=:Blues_9; label=nothing, size=(400, 300))
 Display a heatmap with a discrete colorbar using the specified colormap.
 - `colormap`: Can be a ColorSchemes symbol (e.g., :Blues_9) or a custom vector of colors.
 """
-function discrete_colorbar(; colormap=:Blues_9, label="Value", size=(400, 300))
+function discrete_colorbar(colormap=:Blues_9; label=nothing, size=(400, 300))
+    # Set default label based on colormap
+    if label === nothing
+        if typeof(colormap) <: Symbol
+            label = string(colormap)
+        else
+            label = "custom"
+        end
+    end
     # Prepend 'Discrete: ' to label if not already present
     if !occursin(r"discrete"i, label)
         label = "Discrete: " * label
@@ -102,17 +118,17 @@ end
 
 # Example usage:
 println("Testing continuous colorbar:")
-continuous_colorbar(colormap=:viridis, label="Viridis")
+continuous_colorbar(:viridis)
 
 println("\nTesting discrete colorbar:")
-discrete_colorbar(colormap=:Blues_9, label="Blues")
+discrete_colorbar(:Blues_9)
 
 println("\nTesting custom discrete colorbar:")
 custom_colors = [:red, :orange, :yellow, :green, :blue, :purple]
-discrete_colorbar(colormap=custom_colors, label="Custom Colors")
+discrete_colorbar(custom_colors)
 
 println("\nTesting continuous with Set2_3:")
-continuous_colorbar(colormap=:Set2_3, label="ColorBlewer Set2_3")
+continuous_colorbar(:Set2_3)
 
 println("\nTesting discrete with Set2_3:")
-discrete_colorbar(colormap=:Set2_3, label="ColorBlewer Set2_3")
+discrete_colorbar(:Set2_3)
