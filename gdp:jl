@@ -1,0 +1,82 @@
+using Pkg; Pkg.activate(@__DIR__)
+using Breakers
+using CairoMakie
+using ColorSchemes
+using CSV
+using DataFrames
+using GeoDataFrames
+using GeoMakie
+using Humanize
+using PrettyTables
+
+function with_commas(x)
+    x = Int64.(x)
+    return Humanize.digitsep.(x)
+end
+
+function make_categories()
+    bins = get_bin_indices(df.per_capita, 7)
+    df.bins = bins["fisher"]
+    categories   = []
+    for bin in 1:7
+        bin_data = df.per_capita[df.bins .== bin]
+        if !isempty(bin_data)
+            min_per_capita = minimum(bin_data)
+            max_per_capita = maximum(bin_data)
+            if min_per_capita == max_per_capita
+                push!(categories, "$(with_commas(min_per_capita))") 
+            else
+                push!(categories, "From $(with_commas(min_per_capita)) to $(with_commas(max_per_capita))")
+            end
+        else
+            push!(categories, "No counties")
+        end
+    end
+    return categories   
+end
+
+gdf = GeoDataFrames.read("data/cb_2018_us_state_500k.shp")
+
+acela = ["ME", "NH", "VT", "MA", "CT", "RI", "NY", "NJ", "PA", "MD", "DE", "DC", "VA"]
+
+acela_states = subset(gdf, :STUSPS => ByRow(x -> x in acela))
+
+gdp = CSV.read("data/gdp.csv", DataFrame)
+gdp.State = rstrip.(gdp.State)
+pop = CSV.read("data/pop_death_money.csv", DataFrame)
+df = innerjoin(gdp,pop,on=:State)
+df = innerjoin(df,acela_states,on=:State => :NAME)
+select!(df, Cols(:State,:GDP,:Population,:geometry))
+df = innerjoin(df,acela_states,on=:State => :NAME)
+df.per_capita = (df.GDP ./ df.Population) .- pc
+df.per_capita = Int64.(round.(df.per_capita, digits=0))
+CRS = "+proj=aea +lat_0=39.95 +lon_0=-75.16 +lat_1=37 +lat_2=43 +datum=NAD83 +units=m +no_defs"
+title = "Acela Corridor Per Capita GDP Compared to National Average"
+labels = make_categories()
+below = " below national average GDP per capita"
+above = " above national average GDP per capita"
+labels = [labels[i] * (i < 4 ? below : above) for i in 1:7]
+
+fig = Figure(size = (1600,800), fontsize = 24)
+ga = GeoAxis(fig[1, 1];
+dest = CRS,
+xgridvisible       = false, ygridvisible = false,
+xticksvisible      = false, yticksvisible = false,
+xticklabelsvisible = false, yticklabelsvisible = false) 
+# Plot the map with per capita GDP using PuBu color scheme
+poly!(ga, df.geometry, color=df.bins, colormap=:Spectral_7, strokecolor=:black, strokewidth=0.5)
+colors = colorschemes[:Spectral_7]
+Legend(fig[1, 2],
+[PolyElement(color=c, strokecolor=:black, strokewidth=1) for c in colors],
+labels,
+title
+)
+display(fig)
+
+
+
+
+
+
+
+

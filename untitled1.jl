@@ -40,7 +40,7 @@ dest = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5
 xgridvisible       = false, ygridvisible = false,
 xticksvisible      = false, yticksvisible = false,
 xticklabelsvisible = false, yticklabelsvisible = false) 
-poly!(ga, conus.geometry, colormap = :viridis)
+poly!(ga, conus.geometry, colormap = :PuBu)
 display(fig)
 
 quick_hist(conus.Deaths,"","","")
