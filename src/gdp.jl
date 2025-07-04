@@ -15,7 +15,7 @@ gdp_df.State = strip.(gdp_df.State)
 pop_df.State = strip.(pop_df.State)
 
 # Filter GDP data to only include states that have population data
-gdp_df = subset(gdp_df, :State => ByRow(x -> x in pop_df.State))
+gdp_df = subset(gdp, :State => ByRow(x -> x in pop_df.State))
 
 # Merge the data
 df = innerjoin(gdp_df, pop_df, on=:State)

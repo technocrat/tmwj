@@ -43,12 +43,14 @@ acela_states = subset(gdf, :STUSPS => ByRow(x -> x in acela))
 
 gdp = CSV.read("data/gdp.csv", DataFrame)
 gdp.State = rstrip.(gdp.State)
+gdp_df = subset(gdp, :State => ByRow(x -> x in pop.State))
+
 pop = CSV.read("data/pop_death_money.csv", DataFrame)
-df = innerjoin(gdp,pop,on=:State)
+df = innerjoin(gdp_df,pop,on=:State)
 df = innerjoin(df,acela_states,on=:State => :NAME)
 select!(df, Cols(:State,:GDP,:Population,:geometry))
 df = innerjoin(df,acela_states,on=:State => :NAME)
-df.per_capita = (df.GDP ./ df.Population) .- pc
+df.per_capita = (df.GDP ./ df.Population) 
 df.per_capita = Int64.(round.(df.per_capita, digits=0))
 CRS = "+proj=aea +lat_0=39.95 +lon_0=-75.16 +lat_1=37 +lat_2=43 +datum=NAD83 +units=m +no_defs"
 title = "Acela Corridor Per Capita GDP Compared to National Average"

@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "53f770f7fe433d31e5fa600e0486c9d4f37edbb1"
+project_hash = "6a42144f3e3cd9f9f354946cd6e8428ef2cf1f85"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -633,6 +633,18 @@ version = "0.11.1"
 git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
+
+[[deps.Gumbo]]
+deps = ["AbstractTrees", "Gumbo_jll", "Libdl"]
+git-tree-sha1 = "eab9e02310eb2c3e618343c859a12b51e7577f5e"
+uuid = "708ec375-b3d6-5a57-a7ce-8257bf98657a"
+version = "0.8.3"
+
+[[deps.Gumbo_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "29070dee9df18d9565276d68a596854b1764aa38"
+uuid = "528830af-5a63-567c-a44a-034ed33b8444"
+version = "0.10.2+0"
 
 [[deps.HDF4_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Zlib_jll", "libaec_jll"]
