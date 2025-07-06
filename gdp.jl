@@ -52,24 +52,24 @@ Colorbar(fig[1, 2], label="GDP per Capita (USD)", colormap=:PuBu)
 display(fig)
 
 # Print summary statistics
-println("\nGDP per Capita Summary Statistics:")
-println("Average GDP per capita: $", round(mean(conus.per_capita), digits=0))
-println("Median GDP per capita: $", round(median(conus.per_capita), digits=0))
-println("Minimum GDP per capita: $", round(minimum(conus.per_capita), digits=0))
-println("Maximum GDP per capita: $", round(maximum(conus.per_capita), digits=0))
+# println("\nGDP per Capita Summary Statistics:")
+# println("Average GDP per capita: $", round(mean(conus.per_capita), digits=0))
+# println("Median GDP per capita: $", round(median(conus.per_capita), digits=0))
+# println("Minimum GDP per capita: $", round(minimum(conus.per_capita), digits=0))
+# println("Maximum GDP per capita: $", round(maximum(conus.per_capita), digits=0))
 
 # Show top 5 states by GDP per capita
-println("\nTop 5 States by GDP per Capita:")
-top_5 = first(sort(conus, :per_capita, rev=true), 5)
-for (i, row) in enumerate(eachrow(top_5))
-    println("$i. $(row.State): $", round(row.per_capita, digits=0))
-end
+# println("\nTop 5 States by GDP per Capita:")
+# top_5 = first(sort(conus, :per_capita, rev=true), 5)
+# for (i, row) in enumerate(eachrow(top_5))
+#     println("$i. $(row.State): $", round(row.per_capita, digits=0))
+# end
 
-# Show bottom 5 states by GDP per capita
-println("\nBottom 5 States by GDP per Capita:")
-bottom_5 = first(sort(conus, :per_capita), 5)
-for (i, row) in enumerate(eachrow(bottom_5))
-    println("$i. $(row.State): $", round(row.per_capita, digits=0))
-end
+# # Show bottom 5 states by GDP per capita
+# println("\nBottom 5 States by GDP per Capita:")
+# bottom_5 = first(sort(conus, :per_capita), 5)
+# for (i, row) in enumerate(eachrow(bottom_5))
+#     println("$i. $(row.State): $", round(row.per_capita, digits=0))
+# end
 
 println("\nMap created successfully with PuBu color scheme!") 

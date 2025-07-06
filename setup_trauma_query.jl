@@ -9,6 +9,7 @@ Pkg.add("LibPQ")
 Pkg.add("DBInterface")
 Pkg.add("GeoInterface")
 Pkg.add("GeometryBasics")
+Pkg.add("ArchGDAL")
 
 println("Packages installed successfully!")
 
@@ -47,6 +48,13 @@ try
     println("✓ GeometryBasics imported successfully")
 catch e
     println("✗ Error importing GeometryBasics: ", e)
+end
+
+try
+    using ArchGDAL
+    println("✓ ArchGDAL imported successfully")
+catch e
+    println("✗ Error importing ArchGDAL: ", e)
 end
 
 println("\nSetup complete! You can now run trauma_query.jl or trauma_query_simple.jl") 

@@ -115,14 +115,18 @@ function extract_nth_wikipedia_table(url::String, n::Int=1)
     
     # Ensure all rows have the same number of columns
     max_cols = length(headers)
-    for i in 1:length(rows)
+    for i in eachindex(rows)
+        # pad with empty strings until we reach max_cols
         while length(rows[i]) < max_cols
             push!(rows[i], "")
         end
+    
+        # truncate any extra columns beyond max_cols
         if length(rows[i]) > max_cols
             rows[i] = rows[i][1:max_cols]
         end
     end
+    
     
     # Convert to DataFrame
     df = DataFrame()

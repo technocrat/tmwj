@@ -1,54 +1,34 @@
 using Pkg; Pkg.activate()
 using DataFrames
 using LibPQ
-using GeoInterface
-using GeometryBasics
+using ArchGDAL
 
 """
-    parse_geometry(geom_str::Union{String, Missing})
-
-Parse a geometry string from PostGIS into a proper geometry object.
-Handles WKB, WKT, and other common PostGIS geometry formats.
-"""
-function parse_geometry(geom_str::Union{String, Missing})
-    if ismissing(geom_str) || isempty(geom_str)
-        return missing
-    end
-    
-    try
-        # Try to parse as WKB hex string first
-        if startswith(geom_str, "\\x") || all(c -> c in "0123456789abcdefABCDEF", geom_str)
-            # This is likely a WKB hex string
-            return GeoInterface.read(geom_str)
-        else
-            # Try to parse as WKT
-            return GeoInterface.read(geom_str)
-        end
-    catch e
-        println("Warning: Could not parse geometry: $geom_str")
-        println("Error: $e")
-        return missing
-    end
-end
-
-"""
-    create_trauma_dataframe()
+    create_trauma_dataframe(connection_string::String="host=localhost dbname=tiger", distance_miles::Int=100)
 
 Creates a DataFrame called 'trauma' by querying the TIGER database.
 Joins census.counties, census.population, and census.trauma_centers on :geoid.
 Adds a boolean field 'nearby' that is true if the centroid of any :geom 
-is within 200 miles of the centroid of a :geoid where :center is true.
+is within the specified distance of the centroid of a :geoid where :center is true.
+
+# Arguments
+- `connection_string::String`: PostgreSQL connection string (default: "host=localhost dbname=tiger")
+- `distance_miles::Int`: Distance in miles to check for nearby trauma centers (default: 100)
 
 Returns:
     DataFrame: The trauma DataFrame with all joined data and the nearby field
 """
-function create_trauma_dataframe()
+function create_trauma_dataframe(connection_string::String="host=localhost dbname=tiger", distance_miles::Int=100)
     # Connect to the TIGER database
     println("Connecting to TIGER database...")
-    conn = LibPQ.Connection("dbname=tiger")
+    conn = LibPQ.Connection(connection_string)
     
     try
+        # Convert miles to meters (1 mile = 1609.344 meters)
+        distance_meters = distance_miles * 1609.344
+        
         # SQL query to join the tables and calculate spatial proximity
+        # Use ST_AsBinary() to get geometry in WKB format
         query = """
         SELECT 
             c.geoid,
@@ -66,30 +46,33 @@ function create_trauma_dataframe()
                     AND ST_DWithin(
                         ST_Centroid(c.geom)::geography, 
                         ST_Centroid(tc_county.geom)::geography, 
-                        321868.8  -- 200 miles in meters
+                        $distance_meters
                     )
                 ) THEN true 
                 ELSE false 
             END as nearby,
-            c.geom
+            ST_AsBinary(c.geom) as geom_wkb
         FROM census.counties c
         LEFT JOIN census.county_population p ON c.geoid = p.geoid
         LEFT JOIN census.trauma_centers tc ON c.geoid = tc.geoid
         ORDER BY c.geoid;
         """
         
-        println("Executing query...")
+        println("Executing query with distance threshold of $distance_miles miles...")
         result = LibPQ.execute(conn, query)
         
         # Convert the result to a DataFrame
         println("Converting results to DataFrame...")
         trauma = DataFrame(result)
         
-        # Convert geometry string to proper geometry object if it exists
-        if hasproperty(trauma, :geom) && !isempty(trauma.geom)
-            println("Converting geometry strings to geometry objects...")
-            # Convert WKB/WKT strings to geometry objects
-            trauma.geom = [parse_geometry(geom_str) for geom_str in trauma.geom]
+        # Convert WKB bytes to ArchGDAL geometry objects
+        if hasproperty(trauma, :geom_wkb) && !isempty(trauma.geom_wkb)
+            println("Converting WKB geometries to ArchGDAL objects...")
+            trauma.geom_converted = [ArchGDAL.fromWKB(Vector{UInt8}(wkb)) for wkb in trauma.geom_wkb]
+            
+            # Remove the temporary WKB column
+            select!(trauma, Not(:geom_wkb))
+            rename!(trauma, :geom_converted => :geom)
         end
         
         println("Query completed successfully!")
@@ -102,7 +85,7 @@ function create_trauma_dataframe()
             total_count = nrow(trauma)
             println("\nSummary:")
             println("- Total counties: $total_count")
-            println("- Counties within 200 miles of trauma centers: $nearby_count")
+            println("- Counties within $distance_miles miles of trauma centers: $nearby_count")
             println("- Percentage nearby: $(round(nearby_count/total_count * 100, digits=1))%")
         end
         
@@ -119,11 +102,15 @@ function create_trauma_dataframe()
 end
 
 # Alternative query with different table structure assumptions
-function create_trauma_dataframe_alternative()
-    conn = LibPQ.Connection("dbname=tiger")
+function create_trauma_dataframe_alternative(connection_string::String="host=localhost dbname=tiger", distance_miles::Int=25)
+    conn = LibPQ.Connection(connection_string)
     
     try
+        # Convert miles to meters (1 mile = 1609.344 meters)
+        distance_meters = distance_miles * 1609.344
+        
         # Simpler query that might work with different table structures
+        # Use ST_AsBinary() to get geometry in WKB format
         query = """
         SELECT 
             c.geoid,
@@ -139,29 +126,33 @@ function create_trauma_dataframe_alternative()
                     AND ST_DWithin(
                         ST_Centroid(c.geom)::geography, 
                         ST_Centroid(tc_county.geom)::geography, 
-                        321868.8  -- 200 miles in meters
+                        $distance_meters
                     )
                 ) THEN true 
                 ELSE false 
             END as nearby,
-            c.geom
+            ST_AsBinary(c.geom) as geom_wkb
         FROM census.counties c
         LEFT JOIN census.county_population p ON c.geoid = p.geoid
         LEFT JOIN census.trauma_centers tc ON c.geoid = tc.geoid
         ORDER BY c.geoid;
         """
         
-        println("Executing alternative query...")
+        println("Executing alternative query with distance threshold of $distance_miles miles...")
         result = LibPQ.execute(conn, query)
         trauma = DataFrame(result)
         
         println("Alternative query completed!")
         println("DataFrame 'trauma' created with $(nrow(trauma)) rows")
         
-        # Convert geometry string to proper geometry object if it exists
-        if hasproperty(trauma, :geom) && !isempty(trauma.geom)
-            println("Converting geometry strings to geometry objects...")
-            trauma.geom = [parse_geometry(geom_str) for geom_str in trauma.geom]
+        # Convert WKB bytes to ArchGDAL geometry objects
+        if hasproperty(trauma, :geom_wkb) && !isempty(trauma.geom_wkb)
+            println("Converting WKB geometries to ArchGDAL objects...")
+            trauma.geom_converted = [ArchGDAL.fromWKB(Vector{UInt8}(wkb)) for wkb in trauma.geom_wkb]
+            
+            # Remove the temporary WKB column
+            select!(trauma, Not(:geom_wkb))
+            rename!(trauma, :geom_converted => :geom)
         end
         
         return trauma
@@ -178,16 +169,19 @@ end
 if abspath(PROGRAM_FILE) == @__FILE__
     println("Creating trauma DataFrame...")
     
+    # You can specify the distance here
+    distance_miles = 50  # Change this value as needed
+    
     try
         # Try the main query first
-        trauma = create_trauma_dataframe()
+        trauma = create_trauma_dataframe(distance_miles=distance_miles)
     catch e
         println("Main query failed, trying alternative...")
         println("Error: ", e)
         
         try
             # Try the alternative query
-            trauma = create_trauma_dataframe_alternative()
+            trauma = create_trauma_dataframe_alternative(distance_miles=distance_miles)
         catch e2
             println("Alternative query also failed.")
             println("Error: ", e2)
@@ -210,4 +204,4 @@ if abspath(PROGRAM_FILE) == @__FILE__
 end
 
 # Export the function for use in other scripts
-export create_trauma_dataframe, create_trauma_dataframe_alternative 
+export create_trauma_dataframe, create_trauma_dataframe_alternative
