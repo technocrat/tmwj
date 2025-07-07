@@ -75,3 +75,9 @@ end
 
 subset!(df, :statefp => ByRow(x -> x in VALID_STATEFPS))
 select!(df, :geoid, :statefp, :geom)
+
+# using GeoDataFrames
+# gdf = GeoDataFrame(df)
+# rename!(gdf, :geom => :geometry)
+# GeoDataFrames.write("output.gpkg", gdf)
+# fdg = GeoDataFrames.read("output.gpkg")

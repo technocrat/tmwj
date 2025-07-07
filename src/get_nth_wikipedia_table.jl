@@ -35,6 +35,31 @@ df2 = extract_nth_table(url, 2)
 - Cell text is cleaned by removing extra whitespace and newlines
 - If rows have different numbers of columns, they are padded or truncated to match headers
 - Generic column names are created if no headers are found
+# Main execution
+url = "https://en.wikipedia.org/wiki/List_of_European_countries_by_area"
+
+try
+    # Extract first table (default)
+    df = extract_nth_table(url)
+    println("Successfully extracted table 1 with $(nrow(df)) rows and $(ncol(df)) columns")
+    
+    # Example: Extract second table
+    # df = extract_nth_table(url, 2)
+    # println("Successfully extracted table 2 with $(nrow(df)) rows and $(ncol(df)) columns")
+    
+    println("\nColumn names:")
+    println(names(df))
+    println("\nFirst few rows:")
+    println(first(df, 5))
+    
+    # Optionally save to CSV
+    # using CSV
+    # CSV.write("european_countries_by_area.csv", df)
+    # println("\nTable saved to european_countries_by_area.csv")
+    
+catch e
+    println("Error: ", e)
+end
 """
 
 function extract_nth_wikipedia_table(url::String, n::Int=1)
@@ -137,28 +162,4 @@ function extract_nth_wikipedia_table(url::String, n::Int=1)
     return df
 end
 
-# Main execution
-url = "https://en.wikipedia.org/wiki/List_of_European_countries_by_area"
 
-try
-    # Extract first table (default)
-    df = extract_nth_table(url)
-    println("Successfully extracted table 1 with $(nrow(df)) rows and $(ncol(df)) columns")
-    
-    # Example: Extract second table
-    # df = extract_nth_table(url, 2)
-    # println("Successfully extracted table 2 with $(nrow(df)) rows and $(ncol(df)) columns")
-    
-    println("\nColumn names:")
-    println(names(df))
-    println("\nFirst few rows:")
-    println(first(df, 5))
-    
-    # Optionally save to CSV
-    # using CSV
-    # CSV.write("european_countries_by_area.csv", df)
-    # println("\nTable saved to european_countries_by_area.csv")
-    
-catch e
-    println("Error: ", e)
-end

@@ -1,65 +1,121 @@
 # SCRIPT TO MAP TRAUMA CENTERS TO COUNTIES
 using Pkg; Pkg.activate()
 using CairoMakie
-using Colors
 using ColorSchemes
-using GeoInterface
 using GeoMakie
 using Humanize
 
 include("src/constants.jl")
 include("get_counties_geom.jl")
 include("trauma_query_libpq.jl")
+include("src/plot_with_legend.jl")
 
 
-df = create_trauma_dataframe()      
+df = create_trauma_dataframe(50)      
 df = subset(df, :statefp => ByRow(x -> x in VALID_STATEFPS))
-# conus = VALID_STATEFPS 
-# conus = setdiff(conus, ["02","15"])
-# df = subset(df, :statefp => ByRow(x -> x in conus))
+conus = VALID_STATEFPS 
+conus = setdiff(conus, ["02","15"])
+df = subset(df, :statefp => ByRow(x -> x in conus))
 
 # # Create the figure and axis
-fig = Figure(size = (1400, 800))
-ga = GeoAxis(fig[1, 1];
-dest               = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
-title              = "US Counties: Level 1 Trauma Centers and Nearby Areas",
-aspect             = DataAspect(),
-xgridvisible       = false, ygridvisible = false,
-xticksvisible      = false, yticksvisible = false,
-xticklabelsvisible = false, yticklabelsvisible = false,
-)
-# Define colors for different categories
-trauma_center_color = :darkblue      # Counties with trauma centers
-nearby_color = :lightblue            # Counties within 50 miles of Level 1 trauma centers
-other_color = :lightgray             # All other counties
+"""
+    plot_base_map(df)
 
-# Create color vector based on trauma center status
-colors = [df.is_trauma_center[i] == true ? trauma_center_color : 
-          df.nearby[i] == true ? nearby_color : other_color 
-          for i in eachindex(df.is_trauma_center)]
+Creates a choropleth map of US counties showing Level 1 trauma centers and nearby areas.
 
-# Plot all counties at once using poly! with geometry column and color vector
-poly!(ga, df.geom, color=colors, strokecolor=:black, strokewidth=0.5)
+# Arguments
+- `df`: DataFrame containing county geometries and trauma center data with columns:
+    - `geom`: County geometry objects
+    - `is_trauma_center`: Boolean indicating if county has a Level 1 trauma center
+    - `nearby`: Boolean indicating if county is within 50 miles of a trauma center
 
-# Add legend
+# Returns
+- `Figure` object containing the plotted map
+
+The map uses the ColorBrewer PuBu_3 color scheme where:
+- Dark blue: Counties with Level 1 trauma centers
+- Medium blue: Counties with a center within 50 miles of the center of a county with one or more Level 1 trauma centers  
+- Light purplish blue: All other counties 
+"""
+function plot_base_map(df)
+    fig = Figure(
+        size = (1400, 800),
+        layout = (2, 2),
+        colgap = 10,
+        rowgap = 10
+    )
+
+    # Make the main plot area larger
+    fig.layout[1, 1].width = Relative(0.75)
+    fig.layout[1, 2].width = Relative(0.25)
+    fig.layout[1, 1].height = Relative(0.85)
+    fig.layout[2, 1].height = Relative(0.15)
+
+    ga = GeoAxis(fig[1, 1];
+        dest               = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
+        title              = "US Counties: Level 1 Trauma Centers and Nearby Areas",
+        aspect             = DataAspect(),
+        xgridvisible       = false, ygridvisible = false,
+        xticksvisible      = false, yticksvisible = false,
+        xticklabelsvisible = false, yticklabelsvisible = false,
+    )
+
+    # Define colors for different categories
+    trauma_center_color = colorschemes[:PuBu_3][3]
+    nearby_color = colorschemes[:PuBu_3][2]
+    other_color = colorschemes[:PuBu_3][1]
+
+    # Create color vector based on trauma center status
+    colors = [df.is_trauma_center[i] == true ? trauma_center_color : 
+            df.nearby[i] == true ? nearby_color : other_color 
+            for i in eachindex(df.is_trauma_center)]
+
+    # Plot all counties at once using poly! with geometry column and color vector
+    poly!(ga, df.geom, color=colors, strokecolor=:white, strokewidth=0.5)
+    return fig, trauma_center_color, nearby_color, other_color
+end
+# Create legend and label
+legend = Legend(
+    [PolyElement(color=trauma_center_color, strokecolor=:black),
+    PolyElement(color=nearby_color, strokecolor=:black),
+    PolyElement(color=other_color, strokecolor=:black)],
+    ["Trauma Centers", "Within 50 Miles", "Other Counties"],
+    "County Categories"
+    )
+    
+    fig = plot_with_legend(df)
+    trauma_count = count(df.is_trauma_center)
+    nearby_count = count(df.nearby)
+    total_count = nrow(df)
+    label = Label(
+        "Total Counties: $total_count\nTrauma Centers: $trauma_count\nNearby Counties: $nearby_count",
+        halign = :left, valign = :top, fontsize = 16, tellwidth = false
+    )
+
+    # Stack legend and label vertically in the lower right
+    fig[2, 2] = vbox(legend, label)
+
+
+
+display(fig)
+
+# Add legend in top right
 Legend(fig[1, 2], 
       [PolyElement(color=trauma_center_color, strokecolor=:black),
        PolyElement(color=nearby_color, strokecolor=:black),
        PolyElement(color=other_color, strokecolor=:black)],
-      ["Trauma Centers", "Within 100 Miles", "Other Counties"],
+      ["Trauma Centers", "Within 50 Miles", "Other Counties"],
       "County Categories")
 
-# Add summary statistics
+fig = plot_with_legend(df)
+# Add summary statistics label in bottom right
 trauma_count = count(df.is_trauma_center)
 nearby_count = count(df.nearby)
 total_count = nrow(df)
 
-# Create text box with statistics
-text!(fig[2, 2], 
-      text="Total Counties: $total_count\nTrauma Centers: $trauma_count\nNearby Counties: $nearby_count",
-      align=(:left, :top),
-      fontsize=12,
-      color=:black)
+Label(fig[3, 2],
+    "Total Counties: $total_count\nTrauma Centers: $trauma_count\nNearby Counties: $nearby_count",
+    halign = :left, valign = :top, fontsize = 16, tellwidth = false)
 
 display(fig)
 

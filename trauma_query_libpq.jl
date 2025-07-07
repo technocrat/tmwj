@@ -18,10 +18,14 @@ is within the specified distance of the centroid of a :geoid where :center is tr
 Returns:
     DataFrame: The trauma DataFrame with all joined data and the nearby field
 """
-function create_trauma_dataframe(connection_string::String="host=localhost dbname=tiger", distance_miles::Int=100)
+function create_trauma_dataframe(distance_miles::Int)
     # Connect to the TIGER database
     println("Connecting to TIGER database...")
-    conn = LibPQ.Connection(connection_string)
+    conn = LibPQ.Connection("host=localhost dbname=tiger")
+# function create_trauma_dataframe(connection_string::String="host=localhost dbname=tiger", distance_miles::Int=100)
+#     # Connect to the TIGER database
+#     println("Connecting to TIGER database...")
+#     conn = LibPQ.Connection(connection_string)
     
     try
         # Convert miles to meters (1 mile = 1609.344 meters)
