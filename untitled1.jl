@@ -5,6 +5,8 @@ using DataFrames
 using GeoDataFrames
 using GeoMakie
 using HTTP
+using PrettyTables
+using IOBuffer
 url = "https://raw.githubusercontent.com/technocrat/tmwj/refs/heads/main/data/deaths.csv"
 resp = HTTP.get(url)
 buf  = IOBuffer(resp.body)
@@ -78,3 +80,17 @@ ga2 = GeoAxis(fig2[1, 1];
 poly!(ga2, conus.geometry, color=conus.Deaths, colormap=:Reds, strokecolor=:black, strokewidth=0.5)
 Colorbar(fig2[1, 2], label="Deaths", colormap=:Reds)
 display(fig2)   
+
+# Example of how to capture pretty_table output as a string
+# Create some sample data for demonstration
+annot = [["100", "25", "50", "25"]]
+
+# Method 1: Capture as string using IOBuffer
+io = IOBuffer()
+pretty_table(io, annot, header = ["Total Counties", "Trauma Centers", "Nearby Counties", "Other Counties"])
+table_string = String(take!(io))
+println("Captured table string:")
+println(table_string)
+
+# Method 2: Just display the table (returns nothing, which is normal)
+pretty_table(annot, header = ["Total Counties", "Trauma Centers", "Nearby Counties", "Other Counties"])

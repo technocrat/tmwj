@@ -1,8 +1,8 @@
 using CairoMakie
 using ColorSchemes
 using GeoMakie
-include("src/plot_base_map.jl")
-include("src/constants.jl")
+include("plot_base_map.jl")
+include("constants.jl")
 
 function plot_with_legend(df)
        fig, trauma_center_color, nearby_color, other_color = plot_base_map(df)

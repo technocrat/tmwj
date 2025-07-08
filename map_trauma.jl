@@ -40,16 +40,12 @@ The map uses the ColorBrewer PuBu_3 color scheme where:
 function plot_base_map(df)
     fig = Figure(
         size = (1400, 800),
-        layout = (2, 2),
         colgap = 10,
-        rowgap = 10
+        rowgap = 5
     )
 
-    # Make the main plot area larger
-    fig.layout[1, 1].width = Relative(0.75)
-    fig.layout[1, 2].width = Relative(0.25)
-    fig.layout[1, 1].height = Relative(0.85)
-    fig.layout[2, 1].height = Relative(0.15)
+    fig.layout.widths = [Relative(0.82), Relative(0.18)]
+    fig.layout.heights = [Relative(0.88), Relative(0.12)]
 
     ga = GeoAxis(fig[1, 1];
         dest               = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
@@ -72,50 +68,27 @@ function plot_base_map(df)
 
     # Plot all counties at once using poly! with geometry column and color vector
     poly!(ga, df.geom, color=colors, strokecolor=:white, strokewidth=0.5)
+
+
+
     return fig, trauma_center_color, nearby_color, other_color
 end
-# Create legend and label
-legend = Legend(
+fig = plot_with_legend(df)
+
+legend = Legend(right_grid[1, 1],
     [PolyElement(color=trauma_center_color, strokecolor=:black),
-    PolyElement(color=nearby_color, strokecolor=:black),
-    PolyElement(color=other_color, strokecolor=:black)],
+     PolyElement(color=nearby_color, strokecolor=:black),
+     PolyElement(color=other_color, strokecolor=:black)],
     ["Trauma Centers", "Within 50 Miles", "Other Counties"],
     "County Categories"
-    )
-    
-    fig = plot_with_legend(df)
-    trauma_count = count(df.is_trauma_center)
-    nearby_count = count(df.nearby)
-    total_count = nrow(df)
-    label = Label(
-        "Total Counties: $total_count\nTrauma Centers: $trauma_count\nNearby Counties: $nearby_count",
-        halign = :left, valign = :top, fontsize = 16, tellwidth = false
-    )
+)
 
-    # Stack legend and label vertically in the lower right
-    fig[2, 2] = vbox(legend, label)
-
-
-
-display(fig)
-
-# Add legend in top right
-Legend(fig[1, 2], 
-      [PolyElement(color=trauma_center_color, strokecolor=:black),
-       PolyElement(color=nearby_color, strokecolor=:black),
-       PolyElement(color=other_color, strokecolor=:black)],
-      ["Trauma Centers", "Within 50 Miles", "Other Counties"],
-      "County Categories")
-
-fig = plot_with_legend(df)
-# Add summary statistics label in bottom right
-trauma_count = count(df.is_trauma_center)
-nearby_count = count(df.nearby)
-total_count = nrow(df)
-
-Label(fig[3, 2],
-    "Total Counties: $total_count\nTrauma Centers: $trauma_count\nNearby Counties: $nearby_count",
-    halign = :left, valign = :top, fontsize = 16, tellwidth = false)
+label = Label(right_grid[2, 1],
+    text = "Total Counties: $total_count\nTrauma Centers: $trauma_count\nNearby Counties: $nearby_count",
+    halign = :left, valign = :top, fontsize = 16, tellwidth = false
+)
+right_grid[1, 1] = legend
+right_grid[2, 1] = label
 
 display(fig)
 
