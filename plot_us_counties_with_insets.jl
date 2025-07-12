@@ -1,3 +1,7 @@
+# 2025-07-10
+# Fails to plot after running the code below. Blank plot.
+# Took 10 minutes to run.
+#=
 using CairoMakie, GeoInterfaceMakie
 using GeoDataFrames         # for GDF.read
 using GeometryOps           # for transform

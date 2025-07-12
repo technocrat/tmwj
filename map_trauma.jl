@@ -3,14 +3,13 @@ using Pkg; Pkg.activate()
 using CairoMakie
 using ColorSchemes
 using GeoMakie
-using Humanize
 
 include("src/constants.jl")
 include("get_counties_geom.jl")
 include("trauma_query_libpq.jl")
 include("src/plot_with_legend.jl")
-
-
+include("src/utils.jl")
+BuRd_6 = reverse(colorschemes[:RdBu_6])
 df = create_trauma_dataframe(50)      
 df = subset(df, :statefp => ByRow(x -> x in VALID_STATEFPS))
 conus = VALID_STATEFPS 
@@ -51,18 +50,18 @@ function plot_base_map(df)
         dest               = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
         title              = "US Counties: Level 1 Trauma Centers and Nearby Areas",
         aspect             = DataAspect(),
-        xgridvisible       = false, ygridvisible = false,
-        xticksvisible      = false, yticksvisible = false,
-        xticklabelsvisible = false, yticklabelsvisible = false,
+        # xgridvisible       = false, ygridvisible = false,
+        # xticksvisible      = false, yticksvisible = false,
+        # xticklabelsvisible = false, yticklabelsvisible = false,
     )
-
+    hidedecorations!(ga, grid = false)
     # Define colors for different categories
-    trauma_center_color = colorschemes[:PuBu_3][3]
-    nearby_color = colorschemes[:PuBu_3][2]
-    other_color = colorschemes[:PuBu_3][1]
+    trauma_center_color = BuRd_6[1]
+    nearby_color = BuRd_6[2]
+    other_color = BuRd_6[4]
 
     # Create color vector based on trauma center status
-    colors = [df.is_trauma_center[i] == true ? trauma_center_color : 
+    colores = [df.is_trauma_center[i] == true ? trauma_center_color : 
             df.nearby[i] == true ? nearby_color : other_color 
             for i in eachindex(df.is_trauma_center)]
 
@@ -130,7 +129,7 @@ end
 percentage_counties_served_str = percent(percentage_counties_served)
 percentage_served_population_str = percent(percentage_served_population)
 
-squib = "Of the $all_counties in the continental United States, $served_counties have a Level 1 trauma center within 50 miles, or $percentage_counties_served_str of the counties. This represents $served_population of the total population, or $percentage_served_population_str."
+squib = "Of the $all_counties in the continental United States, $served_counties have a Level 1 trauma center within 50 miles, or $percentage_counties_served_str of the counties. This represents $served_population of the total population, or $percentage_served_population_str. Alaska has no Level 1 trauma centers and relies on air ambulance services to transport patients to trauma centers in the lower 48 states. Hawaii has one Level 1 trauma center, in Honolulu, and relies on air ambulance services to transport patients from other islands."
 
 
 

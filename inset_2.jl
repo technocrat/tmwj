@@ -1,0 +1,125 @@
+#=
+# Inset map of the USA
+
+This example shows how to create an inset map of the USA, that preserves areas as best as possible.
+
+This example is based on https://geocompx.github.io/geocompkg/articles/us-map.html
+
+=#
+
+using GeoMakie, CairoMakie
+import GeoDataFrames
+import GeometryOps as GO, GeoInterface as GI, GeoFormatTypes as GFT
+
+#=
+# Data preparation
+
+The first step is to decide on the best projection for each individual inset. 
+For this case, we decided to use equal area projections for the maps of the 
+contiguous 48 states, Hawaii, and Alaska. 
+While the dataset of Hawaii and Alaska already have this type of projections, 
+we still need to reproject the `us_states` object to US National Atlas Equal Area:
+=#
+
+# CRS strings
+conus_crs = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
+ak_crs = "+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
+hi_crs = "+proj=aea +lat_1=8 +lat_2=18 +lat_0=13 +lon_0=-157 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
+# VALID_STATEFPS
+include("src/constants.jl")
+all_states = GeoDataFrames.read("data/cb_2018_us_state_500k.shp")
+all_states = subset(all_states, :STATEFP => ByRow(x -> x ∈ VALID_STATEFPS))
+conus = subset(all_states, :STATEFP => ByRow(x -> x ∉ ("02", "15")))
+ak = subset(all_states, :STATEFP => ByRow(x -> x == "02"))
+hi = subset(all_states, :STATEFP => ByRow(x -> x == "15"))
+
+
+#=
+# Ratio calculation
+The second step is to calculate scale relations between the main map 
+(the contiguous 48 states) and Hawaii, and between the main map and Alaska. 
+To do so we can calculate areas of the bounding box of each object:
+=#
+
+conus_range = GI.extent(conus.geometry |> GI.GeometryCollection).Y[2] - GI.extent(conus.geometry |> GI.GeometryCollection).Y[1]
+ak_range = GI.extent(ak.geometry |> GI.GeometryCollection).Y[2] - GI.extent(ak.geometry |> GI.GeometryCollection).Y[1]
+hi_range = GI.extent(hi.geometry |> GI.GeometryCollection).Y[2] - GI.extent(hi.geometry |> GI.GeometryCollection).Y[1]
+
+# Next, we can calculate the ratio between their areas:
+
+us_states_hawaii_ratio = hi_range / conus_range
+us_states_alaska_ratio = ak_range / conus_range
+(; us_states_hawaii_ratio, us_states_alaska_ratio) # hide
+
+#=
+# Map creation
+
+We can now create the inset maps.
+
+Here, we diverge from the original example, since Makie.jl does not 
+support creating axes independently of a Figure easily.
+
+=#
+
+# First, we instantiate the figure and the axes:
+fig = Figure(size = (1200, 800))
+
+ax_conus = GeoAxis(fig[1, 1:2],
+    dest               = conus_crs, 
+    tellheight         = false,
+    tellwidth          = false,
+    aspect             = DataAspect(),
+    xgridvisible       = false, 
+    ygridvisible       = false,
+    xticksvisible      = false,
+    yticksvisible      = false,
+    xticklabelsvisible = false,
+    yticklabelsvisible = false)
+poly!(ax_conus, conus.geometry, 
+    color=:white, 
+    strokecolor=:black, 
+    strokewidth=0.5)
+hidedecorations!(ax_conus)
+
+ax_alaska = GeoAxis(fig[2, 1],
+    dest               = ak_crs, 
+    tellheight         = false,
+    tellwidth          = false,
+    aspect             = DataAspect(),
+    xgridvisible       = false, 
+    ygridvisible       = false,
+    xticksvisible      = false,
+    yticksvisible      = false,
+    xticklabelsvisible = false,
+    yticklabelsvisible = false)
+poly!(ax_alaska, ak.geometry, 
+    color=:white, 
+    strokecolor=:black, 
+    strokewidth=0.5)
+
+ax_hawaii = GeoAxis(fig[2, 2],
+    dest               = hi_crs, 
+    tellheight         = false,
+    tellwidth          = false,
+    aspect             = DataAspect(),
+    xgridvisible       = false, 
+    ygridvisible       = false,
+    xticksvisible      = false,
+    yticksvisible      = false,
+    xticklabelsvisible = false,
+    yticklabelsvisible = false)
+
+poly!(ax_hawaii, hi.geometry, 
+    color=:white, 
+    strokecolor=:black, 
+    strokewidth=0.5)
+
+# Adjust the column widths to scale Hawaii according to the ratio
+colsize!(fig.layout, 1, Relative(0.7))  # Alaska gets 70% of width
+colsize!(fig.layout, 2, Relative(0.3))  # Hawaii gets 30% of width (scaled by ratio)
+
+# Adjust row heights
+rowsize!(fig.layout, 1, Relative(0.7))  # Main map (CONUS) gets 70% of height
+rowsize!(fig.layout, 2, Relative(0.3))  # Detail maps (Alaska + Hawaii) get 30% of height
+
+fig

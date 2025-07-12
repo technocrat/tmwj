@@ -11,8 +11,39 @@ df = create_trauma_dataframe(50)
 df = subset(df, :statefp => ByRow(x -> x in VALID_STATEFPS))
 conus = VALID_STATEFPS 
 conus = setdiff(conus, ["02","15"])
+ak = subset(df, :statefp => ByRow(x -> x == "02"))
+
+# Debug Alaska data
+println("Alaska data debug:")
+println("Number of Alaska counties: ", nrow(ak))
+if nrow(ak) > 0
+    println("Alaska columns: ", names(ak))
+    println("First Alaska county: ", ak[1, :geoid])
+    println("Alaska geometry type: ", typeof(ak.geom))
+    println("First Alaska geometry: ", ak.geom[1])
+else
+    println("No Alaska data found!")
+end
+
+# Debug Alaska geometry bounds
+println("Checking Alaska geometry bounds...")
+if nrow(ak) > 0
+    # Get bounds of first Alaska geometry
+    first_geom = ak.geom[1]
+    println("First Alaska geometry type: ", ArchGDAL.getgeomtype(first_geom))
+    
+    # Try to get bounds using ArchGDAL
+    try
+        bounds = ArchGDAL.bounds(first_geom)
+        println("Alaska bounds: ", bounds)
+    catch e
+        println("Could not get bounds: ", e)
+    end
+end
+
 df = subset(df, :statefp => ByRow(x -> x in conus))
 df = unique(df, :geoid)
+
 total_counties = size(df, 1)
 trauma_counties = sum(df.is_trauma_center)
 nearby_counties = sum(df.nearby)
@@ -60,13 +91,7 @@ xticklabelsvisible = false, yticklabelsvisible = false,
 )
 poly!(ga, df.geom, color=colores, strokecolor=:white, strokewidth=0.5)
 
-# Scale bar (50 miles interval) 
-scale_length_m = 80467.2  # 50 miles in meters
-# Example: lower left of the conterminous US bounding box (adjust as needed)
-x0, y0 = -2.2e6, -1.6e6
-x1 = x0 + scale_length_m
-lines!(ga, [x0, x1], [y0, y0], color=:black, linewidth=3)
-text!(ga, "50 mi", position = ((x0 + x1)/2, y0 - 5e4), align = (:center, :top), fontsize=12)
+
 
 # Legend to the right
 legend = Legend(f[2, 3],
@@ -115,5 +140,90 @@ text!(f.scene, "50 mi",
       align=(:center, :top), 
       fontsize=14, color=:black)
 
+# Alaska Albers projection for inset
+ak_proj = "+proj=aea +lat_1=55 +lat_2=65 +lat_0=50 +lon_0=-154 +datum=WGS84 +units=m +no_defs"
+
+# Compute tight bounding box for all Alaska geometries
+using Statistics
+
+println("Computing Alaska bounding box...")
+if nrow(ak) > 0
+    min_lon = Inf
+    max_lon = -Inf
+    min_lat = Inf
+    max_lat = -Inf
+    valid_bounds_found = false
+    for geom in ak.geom
+        try
+            b = ArchGDAL.bounds(geom)
+            if all(isfinite, b)
+                min_lon = min(min_lon, b[1])
+                max_lon = max(max_lon, b[2])
+                min_lat = min(min_lat, b[3])
+                max_lat = max(max_lat, b[4])
+                valid_bounds_found = true
+            else
+                println("Skipping geometry with non-finite bounds: ", b)
+            end
+        catch e
+            println("Could not get bounds for a geometry: ", e)
+        end
+    end
+    if valid_bounds_found
+        # Add a small margin
+        margin_lon = (max_lon - min_lon) * 0.05
+        margin_lat = (max_lat - min_lat) * 0.05
+        ak_limits = (min_lon - margin_lon, max_lon + margin_lon, min_lat - margin_lat, max_lat + margin_lat)
+        println("Alaska axis limits: ", ak_limits)
+    else
+        ak_limits = (-180, -130, 50, 75)
+        println("No valid bounds found for Alaska, using default limits: ", ak_limits)
+    end
+else
+    ak_limits = (-180, -130, 50, 75)
+end
+
+# Override the Alaska inset axis limits to focus on the main landmass
+# Focus on the main landmass, ignore most Aleutians
+ak_limits = (-170, -140, 54, 72)
+
+ax_inset = GeoAxis(
+    f[1, 4],
+    dest="EPSG:4326",
+    title="AK/HI (not to scale)",
+    xgridvisible=false, ygridvisible=false,
+    xticksvisible=false, yticksvisible=false,
+    xticklabelsvisible=false, yticklabelsvisible=false,
+    width=Relative(0.22),   # make inset larger
+    height=Relative(0.22),
+    limits=ak_limits,
+    aspect=:auto,           # allow non-square aspect
+)
+
+# Debug inset plotting
+println("Inset plotting debug:")
+println("Number of Alaska counties for plotting: ", nrow(ak))
+println("Alaska geometry vector length: ", length(ak.geom))
+
+AK_colores = [ak.is_trauma_center[i] == true ? trauma_center_color : 
+    ak.nearby[i] == true ? nearby_color : other_color 
+    for i in eachindex(ak.is_trauma_center)]
+
+println("Alaska colors vector length: ", length(AK_colores))
+
+# Try plotting with error handling
+try
+    poly!(ax_inset, ak.geom, color=AK_colores, strokecolor=:white, strokewidth=0.5)
+    println("Alaska inset plotted successfully")
+catch e
+    println("Error plotting Alaska inset: ", e)
+    # Try plotting without colors first
+    try
+        poly!(ax_inset, ak.geom, color=:gray, strokecolor=:white, strokewidth=0.5)
+        println("Alaska inset plotted with gray color")
+    catch e2
+        println("Error plotting Alaska inset even with gray: ", e2)
+    end
+end
 
 display(f)
