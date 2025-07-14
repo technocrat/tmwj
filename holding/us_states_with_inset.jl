@@ -64,16 +64,7 @@ function fit_to_bbox_projected(geom, target_min, target_max; rotation_degrees=0)
 end
 
 # Main plotting function
-function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; 
-                            zoom_to_insets=false,
-                            title="",
-                            caption="",
-                            legend_elements=nothing,
-                            legend_labels=nothing,
-                            legend_title="",
-                            colors=nothing,
-                            show_north_arrow=false,
-                            show_scale_bar=false)
+function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=false)
     # Separate continental US states
     conus_states = @chain states_gdf begin
         @rsubset(:STUSPS ∉ ["AK", "HI", "PR", "VI", "GU", "MP", "AS"])
@@ -134,16 +125,16 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf;
     visual_reference_y = conus_min_y + conus_height * 0.15  # Adjust this percentage as needed
     
     # Debug output
-    println("Continental US bounds - X: $conus_min_x to $conus_max_x, Y: $conus_min_y to $conus_max_y")
-    println("Visual reference line (SW states bottom): $visual_reference_y")
-    println("Difference from true bottom: $(visual_reference_y - conus_min_y) meters")
+    # println("Continental US bounds - X: $conus_min_x to $conus_max_x, Y: $conus_min_y to $conus_max_y")
+    # println("Visual reference line (SW states bottom): $visual_reference_y")
+    # println("Difference from true bottom: $(visual_reference_y - conus_min_y) meters")
     
     # Define target bounding boxes (in projected meters)
     # Alaska: even smaller for conventional layout
     alaska_width = conus_width * 0.15  # Smaller than before
     alaska_height = conus_height * 0.15  # Smaller than before
     # Position Alaska further left with tighter gap
-    alaska_x_offset = -conus_width * 0.05  # Less left offset to bring closer to Hawaii
+    alaska_x_offset = -conus_width * -0.05  # more negative to bring closer to Hawaii
     # Use gap from visual reference line (SW states) not from Key West
     alaska_y_gap = 100000  # 100km gap from visual reference line
     alaska_target_min = (conus_min_x + alaska_x_offset, visual_reference_y - alaska_height - alaska_y_gap)
@@ -170,33 +161,21 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf;
     ak_transformed = fit_to_bbox_projected(ak_geom_conus_proj, alaska_target_min, alaska_target_max)
     hi_transformed = fit_to_bbox_projected(hi_geom_conus_proj, hawaii_target_min, hawaii_target_max, rotation_degrees=30)
     
-    # Create the plot with layout grid
+    # Create the plot
     fig = Figure(size = (1200, 800), backgroundcolor = :white)
-    
-    # Main map axis - use subplot grid for better control
-    ax = Axis(fig[2, 1:3], aspect = DataAspect(), backgroundcolor = :lightblue)
+    # background color is transparent to hide the bounding box lines, when not :white or transparent
+    ax = Axis(fig[1, 1], aspect = DataAspect(), backgroundcolor = :transparent)
     
     # Plot continental US
-    if isnothing(colors)
-        # Default colors if none provided
-        for geom in conus_geoms_projected
-            poly!(ax, geom, color = :white, strokecolor = :black, strokewidth = 0.5)
-        end
-    else
-        # Use provided colors for continental US
-        conus_colors = colors[1:length(conus_geoms_projected)]
-        for (i, geom) in enumerate(conus_geoms_projected)
-            poly!(ax, geom, color = conus_colors[i], strokecolor = :black, strokewidth = 0.5)
-        end
+    for geom in conus_geoms_projected
+        poly!(ax, geom, color = :white, strokecolor = :black, strokewidth = 0.5)
     end
     
-    # Plot Alaska with appropriate color
-    ak_color = isnothing(colors) ? :white : colors[length(conus_geoms_projected) + 1]
-    poly!(ax, ak_transformed, color = ak_color, strokecolor = :black, strokewidth = 0.5)
+    # Plot Alaska
+    poly!(ax, ak_transformed, color = :white, strokecolor = :black, strokewidth = 0.5)
     
-    # Plot Hawaii with appropriate color
-    hi_color = isnothing(colors) ? :white : colors[length(conus_geoms_projected) + 2]
-    poly!(ax, hi_transformed, color = hi_color, strokecolor = :black, strokewidth = 0.5)
+    # Plot Hawaii
+    poly!(ax, hi_transformed, color = :white, strokecolor = :black, strokewidth = 0.5)
     
     # Add bounding boxes for insets (optional)
     alaska_bbox_points = [
@@ -214,22 +193,22 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf;
         Point2(hawaii_target_min[1], hawaii_target_max[2]),
         Point2(hawaii_target_min...)
     ]
-    
-    lines!(ax, alaska_bbox_points, color = :transparent, linewidth = 1, linestyle = :dash)
-    lines!(ax, hawaii_bbox_points, color = :transparent, linewidth = 1, linestyle = :dash)
+    # line drawing of bounding boxes for insets suppressed with :white color
+    lines!(ax, alaska_bbox_points, color = :white, linewidth = 1, linestyle = :dash)
+    lines!(ax, hawaii_bbox_points, color = :white, linewidth = 1, linestyle = :dash)
     
     # Add labels
-    text!(ax, "                           Alaska and Hawaii not to scale", position = (alaska_target_min[1] + alaska_width/2, alaska_target_max[2] + 50000),
-          align = (:center, :bottom), fontsize = 14, font = "Arial Bold")
+    text!(ax, "Alaska and Hawaii not to scale", position = (alaska_target_min[1] + alaska_width/2, alaska_target_max[2] + 50000),
+          align = (:center, :bottom), fontsize = 14, font = "Arial")
     text!(ax, "", position = (hawaii_x_center, hawaii_target_max[2] + 50000),
-          align = (:center, :bottom), fontsize = 14, font = "Arial Bold")
+          align = (:center, :bottom), fontsize = 14, font = "Arial")
     
     # Set axis limits based on zoom preference
     if zoom_to_insets
         # Zoom to show just the bottom portion with insets
         plot_min_y = min(alaska_target_min[2], hawaii_target_min[2]) - 50000
         plot_max_y = conus_min_y + conus_height * 0.3  # Show only bottom 30% of continental US
-        println("Zoomed view: focusing on insets and southern states")
+        # println("Zoomed view: focusing on insets and southern states")
     else
         # Show full map
         plot_min_y = min(alaska_target_min[2], hawaii_target_min[2]) - 50000
@@ -243,62 +222,15 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf;
     ylims!(ax, plot_min_y, plot_max_y)
     
     # Debug output
-    println("Plot Y limits: $plot_min_y to $plot_max_y (range: $(plot_max_y - plot_min_y))")
-    println("Plot X limits: $plot_min_x to $plot_max_x (range: $(plot_max_x - plot_min_x))")
-    println("Continental US height: $conus_height")
-    println("Y-axis spans $(round((plot_max_y - plot_min_y)/1000)) km")
-    println("Expected Y-span should be roughly $(round((conus_height + alaska_height + alaska_y_gap + 100000)/1000)) km")
+    # println("Plot Y limits: $plot_min_y to $plot_max_y (range: $(plot_max_y - plot_min_y))")
+    # println("Plot X limits: $plot_min_x to $plot_max_x (range: $(plot_max_x - plot_min_x))")
+    # println("Continental US height: $conus_height")
+    # println("Y-axis spans $(round((plot_max_y - plot_min_y)/1000)) km")
+    # println("Expected Y-span should be roughly $(round((conus_height + alaska_height + alaska_y_gap + 100000)/1000)) km")
     
     # Remove axis decorations
     hidedecorations!(ax)
     hidespines!(ax)
-    
-    # Add title if provided
-    if !isempty(title)
-        Label(fig[1, :], title, fontsize = 24, font = "Arial Bold")
-    end
-    
-    # Add legend if elements provided
-    if !isnothing(legend_elements) && !isnothing(legend_labels)
-        Legend(fig[3, 3], legend_elements, legend_labels, legend_title;
-               halign = :right, valign = :top, fontsize = 12)
-    end
-    
-    # Add caption if provided
-    if !isempty(caption)
-        Label(fig[4, :], caption, fontsize = 10, halign = :right)
-    end
-    
-    # Add north arrow if requested
-    if show_north_arrow
-        text!(fig.scene, "⇧\nN", 
-              position=(0.85, 0.6),
-              space=:relative,
-              align=(:left, :top), 
-              fontsize=36, color=:black)
-    end
-    
-    # Add scale bar if requested
-    if show_scale_bar
-        # Calculate scale bar for 100 miles
-        map_width_meters = conus_width  # width in meters
-        miles_to_meters = 160934.4  # 100 miles in meters
-        scale_bar_length = (miles_to_meters / map_width_meters) * 0.8  # as fraction of plot width
-        
-        scale_bar_x = 0.85
-        scale_bar_y = 0.45
-        
-        lines!(fig.scene, 
-               [scale_bar_x - scale_bar_length/2, scale_bar_x + scale_bar_length/2], 
-               [scale_bar_y, scale_bar_y], 
-               space=:relative, color=:black, linewidth=3)
-        
-        text!(fig.scene, "100 mi", 
-              position=(scale_bar_x, scale_bar_y - 0.02),
-              space=:relative,
-              align=(:center, :top), 
-              fontsize=14, color=:black)
-    end
     
     return fig
 end
@@ -309,5 +241,5 @@ states = GeoDataFrames.read("data/2024_shp/cb_2024_us_state_500k.shp")
 alaska = @rsubset(states, :STUSPS == "AK")
 hawaii = @rsubset(states, :STUSPS == "HI")
 
-fig = plot_us_with_insets(states, alaska, hawaii, title="Map of the United States with Alaska and Hawaii insets")
-# save("us_map_with_insets.png", fig)
+fig = plot_us_with_insets(states, alaska, hawaii)
+# save("us_map_with_insets.png", fig

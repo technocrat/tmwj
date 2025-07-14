@@ -3,8 +3,7 @@ using GeoDataFrames
 using DataFramesMeta
 import GeometryOps as GO
 using GeoInterface
-using Proj
-
+usikk
 # Define the Albers Equal Area projection for continental US
 const AEA_CONUS = "+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=37.5 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs"
 
@@ -85,21 +84,10 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
     
     # Reproject Hawaii
     hi_geom = hawaii_gdf.geometry[1]  # assuming single multipolygon
-    
-    # Filter to just the main inhabited islands (first 10 polygons)
-    # Get the component polygons
-    hi_polygons = GI.getgeom(hi_geom)
-    
-    # Take only the first 10 polygons (the inhabited islands)
-    inhabited_polygons = collect(Iterators.take(hi_polygons, 10))
-    
-    # Create a new MultiPolygon with just the inhabited islands
-    hi_geom_filtered = GI.MultiPolygon(inhabited_polygons)
-    
     # First project Hawaii using its own Albers projection
-    hi_geom_hawaii_aea = reproject_geom_proj(hi_geom_filtered, source_crs, AEA_HAWAII)
+    hi_geom_hawaii_aea = reproject_geom_proj(hi_geom, source_crs, AEA_HAWAII)
     # Then reproject to continental US projection
-    hi_geom_conus_proj = reproject_geom_proj(hi_geom_filtered, source_crs, AEA_CONUS)
+    hi_geom_conus_proj = reproject_geom_proj(hi_geom, source_crs, AEA_CONUS)
     
     # Get extent of continental US for positioning
     # Combine all conus geometries to get full extent
@@ -134,7 +122,7 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
     alaska_width = conus_width * 0.15  # Smaller than before
     alaska_height = conus_height * 0.15  # Smaller than before
     # Position Alaska further left with tighter gap
-    alaska_x_offset = -conus_width * -0.05  # more negative to bring closer to Hawaii
+    alaska_x_offset = -conus_width * 0.05  # Less left offset to bring closer to Hawaii
     # Use gap from visual reference line (SW states) not from Key West
     alaska_y_gap = 100000  # 100km gap from visual reference line
     alaska_target_min = (conus_min_x + alaska_x_offset, visual_reference_y - alaska_height - alaska_y_gap)
@@ -149,10 +137,10 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
     println("Distance from visual reference to Alaska top: $(alaska_y_gap)")
     println("Alaska bounds - X: $(alaska_target_min[1]) to $(alaska_target_max[1]), Y: $(alaska_target_min[2]) to $(alaska_target_max[2])")
     
-    # Hawaii: make much bigger now that we only have inhabited islands
-    hawaii_width = conus_width * 0.45  # Much bigger - was 0.4
-    hawaii_height = conus_height * 0.45  # Much bigger
-    hawaii_x_center = conus_min_x + conus_width * 0.3  # Position
+    # Hawaii: make bigger and position closer to Alaska
+    hawaii_width = conus_width * 0.35  # Bigger than before (was 0.3)
+    hawaii_height = conus_height * 0.35  # Bigger than before
+    hawaii_x_center = conus_min_x + conus_width * 0.3  # Move left to be closer to Alaska
     hawaii_y_offset = 0  # Keep at same level as Alaska
     hawaii_target_min = (hawaii_x_center - hawaii_width/2, alaska_target_min[2] + hawaii_y_offset)
     hawaii_target_max = (hawaii_x_center + hawaii_width/2, alaska_target_max[2] + hawaii_y_offset)
@@ -163,8 +151,7 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
     
     # Create the plot
     fig = Figure(size = (1200, 800), backgroundcolor = :white)
-    # background color is transparent to hide the bounding box lines, when not :white or transparent
-    ax = Axis(fig[1, 1], aspect = DataAspect(), backgroundcolor = :transparent)
+    ax = Axis(fig[1, 1], aspect = DataAspect(), backgroundcolor = :lightblue)
     
     # Plot continental US
     for geom in conus_geoms_projected
@@ -193,15 +180,15 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
         Point2(hawaii_target_min[1], hawaii_target_max[2]),
         Point2(hawaii_target_min...)
     ]
-    # line drawing of bounding boxes for insets suppressed with :white color
-    lines!(ax, alaska_bbox_points, color = :white, linewidth = 1, linestyle = :dash)
-    lines!(ax, hawaii_bbox_points, color = :white, linewidth = 1, linestyle = :dash)
+    
+    lines!(ax, alaska_bbox_points, color = :gray, linewidth = 1, linestyle = :dash)
+    lines!(ax, hawaii_bbox_points, color = :gray, linewidth = 1, linestyle = :dash)
     
     # Add labels
-    text!(ax, "Alaska and Hawaii not to scale", position = (alaska_target_min[1] + alaska_width/2, alaska_target_max[2] + 50000),
-          align = (:center, :bottom), fontsize = 14, font = "Arial")
-    text!(ax, "", position = (hawaii_x_center, hawaii_target_max[2] + 50000),
-          align = (:center, :bottom), fontsize = 14, font = "Arial")
+    text!(ax, "ALASKA", position = (alaska_target_min[1] + alaska_width/2, alaska_target_max[2] + 50000),
+          align = (:center, :bottom), fontsize = 14, font = "Arial Bold")
+    text!(ax, "HAWAII", position = (hawaii_x_center, hawaii_target_max[2] + 50000),
+          align = (:center, :bottom), fontsize = 14, font = "Arial Bold")
     
     # Set axis limits based on zoom preference
     if zoom_to_insets

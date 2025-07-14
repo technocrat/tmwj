@@ -1,3 +1,13 @@
+# MIT LICENSE
+# Copyright (c) 2025, Richard Careaga
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
 using CairoMakie
 using GeoDataFrames
 using DataFramesMeta
@@ -64,7 +74,16 @@ function fit_to_bbox_projected(geom, target_min, target_max; rotation_degrees=0)
 end
 
 # Main plotting function
-function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=false)
+function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; 
+                            zoom_to_insets=false,
+                            title="",
+                            caption="",
+                            legend_elements=nothing,
+                            legend_labels=nothing,
+                            legend_title="",
+                            colors=nothing,
+                            show_north_arrow=false,
+                            show_scale_bar=false)
     # Separate continental US states
     conus_states = @chain states_gdf begin
         @rsubset(:STUSPS ∉ ["AK", "HI", "PR", "VI", "GU", "MP", "AS"])
@@ -85,10 +104,21 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
     
     # Reproject Hawaii
     hi_geom = hawaii_gdf.geometry[1]  # assuming single multipolygon
+    
+    # Filter to just the main inhabited islands (first 10 polygons)
+    # Get the component polygons
+    hi_polygons = GI.getgeom(hi_geom)
+    
+    # Take only the first 10 polygons (the inhabited islands)
+    inhabited_polygons = collect(Iterators.take(hi_polygons, 10))
+    
+    # Create a new MultiPolygon with just the inhabited islands
+    hi_geom_filtered = GI.MultiPolygon(inhabited_polygons)
+    
     # First project Hawaii using its own Albers projection
-    hi_geom_hawaii_aea = reproject_geom_proj(hi_geom, source_crs, AEA_HAWAII)
+    hi_geom_hawaii_aea = reproject_geom_proj(hi_geom_filtered, source_crs, AEA_HAWAII)
     # Then reproject to continental US projection
-    hi_geom_conus_proj = reproject_geom_proj(hi_geom, source_crs, AEA_CONUS)
+    hi_geom_conus_proj = reproject_geom_proj(hi_geom_filtered, source_crs, AEA_CONUS)
     
     # Get extent of continental US for positioning
     # Combine all conus geometries to get full extent
@@ -138,10 +168,10 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
     println("Distance from visual reference to Alaska top: $(alaska_y_gap)")
     println("Alaska bounds - X: $(alaska_target_min[1]) to $(alaska_target_max[1]), Y: $(alaska_target_min[2]) to $(alaska_target_max[2])")
     
-    # Hawaii: make bigger and position closer to Alaska
-    hawaii_width = conus_width * 0.35  # Bigger than before (was 0.3)
-    hawaii_height = conus_height * 0.35  # Bigger than before
-    hawaii_x_center = conus_min_x + conus_width * 0.3  # Move left to be closer to Alaska
+    # Hawaii: make much bigger now that we only have inhabited islands
+    hawaii_width = conus_width * 0.45  # Much bigger - was 0.4
+    hawaii_height = conus_height * 0.45  # Much bigger
+    hawaii_x_center = conus_min_x + conus_width * 0.3  # Position
     hawaii_y_offset = 0  # Keep at same level as Alaska
     hawaii_target_min = (hawaii_x_center - hawaii_width/2, alaska_target_min[2] + hawaii_y_offset)
     hawaii_target_max = (hawaii_x_center + hawaii_width/2, alaska_target_max[2] + hawaii_y_offset)
@@ -150,20 +180,33 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
     ak_transformed = fit_to_bbox_projected(ak_geom_conus_proj, alaska_target_min, alaska_target_max)
     hi_transformed = fit_to_bbox_projected(hi_geom_conus_proj, hawaii_target_min, hawaii_target_max, rotation_degrees=30)
     
-    # Create the plot
+    # Create the plot with layout grid
     fig = Figure(size = (1200, 800), backgroundcolor = :white)
-    ax = Axis(fig[1, 1], aspect = DataAspect(), backgroundcolor = :lightblue)
+    
+    # Main map axis - use subplot grid for better control
+    ax = Axis(fig[2, 1:3], aspect = DataAspect(), backgroundcolor = :lightblue)
     
     # Plot continental US
-    for geom in conus_geoms_projected
-        poly!(ax, geom, color = :white, strokecolor = :black, strokewidth = 0.5)
+    if isnothing(colors)
+        # Default colors if none provided
+        for geom in conus_geoms_projected
+            poly!(ax, geom, color = :white, strokecolor = :black, strokewidth = 0.5)
+        end
+    else
+        # Use provided colors for continental US
+        conus_colors = colors[1:length(conus_geoms_projected)]
+        for (i, geom) in enumerate(conus_geoms_projected)
+            poly!(ax, geom, color = conus_colors[i], strokecolor = :black, strokewidth = 0.5)
+        end
     end
     
-    # Plot Alaska
-    poly!(ax, ak_transformed, color = :white, strokecolor = :black, strokewidth = 0.5)
+    # Plot Alaska with appropriate color
+    ak_color = isnothing(colors) ? :white : colors[length(conus_geoms_projected) + 1]
+    poly!(ax, ak_transformed, color = ak_color, strokecolor = :black, strokewidth = 0.5)
     
-    # Plot Hawaii
-    poly!(ax, hi_transformed, color = :white, strokecolor = :black, strokewidth = 0.5)
+    # Plot Hawaii with appropriate color
+    hi_color = isnothing(colors) ? :white : colors[length(conus_geoms_projected) + 2]
+    poly!(ax, hi_transformed, color = hi_color, strokecolor = :black, strokewidth = 0.5)
     
     # Add bounding boxes for insets (optional)
     alaska_bbox_points = [
@@ -182,13 +225,13 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
         Point2(hawaii_target_min...)
     ]
     
-    lines!(ax, alaska_bbox_points, color = :gray, linewidth = 1, linestyle = :dash)
-    lines!(ax, hawaii_bbox_points, color = :gray, linewidth = 1, linestyle = :dash)
+    lines!(ax, alaska_bbox_points, color = :transparent, linewidth = 1, linestyle = :dash)
+    lines!(ax, hawaii_bbox_points, color = :transparent, linewidth = 1, linestyle = :dash)
     
     # Add labels
-    text!(ax, "ALASKA", position = (alaska_target_min[1] + alaska_width/2, alaska_target_max[2] + 50000),
+    text!(ax, "                           Alaska and Hawaii not to scale", position = (alaska_target_min[1] + alaska_width/2, alaska_target_max[2] + 50000),
           align = (:center, :bottom), fontsize = 14, font = "Arial Bold")
-    text!(ax, "HAWAII", position = (hawaii_x_center, hawaii_target_max[2] + 50000),
+    text!(ax, "", position = (hawaii_x_center, hawaii_target_max[2] + 50000),
           align = (:center, :bottom), fontsize = 14, font = "Arial Bold")
     
     # Set axis limits based on zoom preference
@@ -220,6 +263,53 @@ function plot_us_with_insets(states_gdf, alaska_gdf, hawaii_gdf; zoom_to_insets=
     hidedecorations!(ax)
     hidespines!(ax)
     
+    # Add title if provided
+    if !isempty(title)
+        Label(fig[1, :], title, fontsize = 24, font = "Arial Bold")
+    end
+    
+    # Add legend if elements provided
+    if !isnothing(legend_elements) && !isnothing(legend_labels)
+        Legend(fig[3, 3], legend_elements, legend_labels, legend_title;
+               halign = :right, valign = :top, fontsize = 12)
+    end
+    
+    # Add caption if provided
+    if !isempty(caption)
+        Label(fig[4, :], caption, fontsize = 10, halign = :right)
+    end
+    
+    # Add north arrow if requested
+    if show_north_arrow
+        text!(fig.scene, "⇧\nN", 
+              position=(0.85, 0.6),
+              space=:relative,
+              align=(:left, :top), 
+              fontsize=36, color=:black)
+    end
+    
+    # Add scale bar if requested
+    if show_scale_bar
+        # Calculate scale bar for 100 miles
+        map_width_meters = conus_width  # width in meters
+        miles_to_meters = 160934.4  # 100 miles in meters
+        scale_bar_length = (miles_to_meters / map_width_meters) * 0.8  # as fraction of plot width
+        
+        scale_bar_x = 0.85
+        scale_bar_y = 0.45
+        
+        lines!(fig.scene, 
+               [scale_bar_x - scale_bar_length/2, scale_bar_x + scale_bar_length/2], 
+               [scale_bar_y, scale_bar_y], 
+               space=:relative, color=:black, linewidth=3)
+        
+        text!(fig.scene, "100 mi", 
+              position=(scale_bar_x, scale_bar_y - 0.02),
+              space=:relative,
+              align=(:center, :top), 
+              fontsize=14, color=:black)
+    end
+    
     return fig
 end
 
@@ -229,5 +319,5 @@ states = GeoDataFrames.read("data/2024_shp/cb_2024_us_state_500k.shp")
 alaska = @rsubset(states, :STUSPS == "AK")
 hawaii = @rsubset(states, :STUSPS == "HI")
 
-fig = plot_us_with_insets(states, alaska, hawaii)
-# save("us_map_with_insets.png", fig)
+fig = plot_us_with_insets(states, alaska, hawaii, title="Map of the United States with Alaska and Hawaii insets")
+#save("us_map_with_insets.png", fig)

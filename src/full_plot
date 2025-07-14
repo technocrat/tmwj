@@ -1,0 +1,79 @@
+using Pkg
+Pkg.activate(@__DIR__)
+using CairoMakie
+using CoordRefSystems
+using CSV
+using DataFrames
+using GeoIO
+using GeoStats
+using GeoTables
+using Meshes
+using StaticArrays
+using Unitful
+
+include("src/constants.jl")
+include("src/get_inset_states.jl")
+include("src/rotation_table.jl")
+include("src/inset_functions.jl")
+include("src/plot_states_with_inset.jl")
+
+
+df = CSV.read("data/trauma_centers.csv", DataFrame)
+# source data has the geoid as an integer, but we will be joining on strings
+df.geoid = lpad.(df.geoid, 5, "0")
+select!(df, :geoid, :population, :is_trauma_center, :nearby)
+
+# County level data
+tigerline_file = "data/2024_shp/cb_2024_us_county_500k.shp"
+# returns GeoTables
+conus, alaska, hawaii = get_inset_states(tigerline_file)
+
+# convert to DataFrames for subsetting and joining
+conus = DataFrame(conus)
+alaska = DataFrame(alaska)
+hawaii = DataFrame(hawaii)
+
+
+
+# isolate the continental US, Alaska and Hawaii 
+conus = subset(conus, :STUSPS => ByRow(x -> x ∈ values(VALID_STATE_CODES)))
+alaska = subset(alaska, :STUSPS => ByRow(x -> x == "AK"))
+hawaii = subset(hawaii, :STUSPS => ByRow(x -> x == "HI"))
+
+# select the only the columns we need for the main plot
+select!(conus, :geometry, :GEOID, :NAME, :STUSPS)
+select!(alaska, :geometry, :GEOID, :NAME, :STUSPS)
+select!(hawaii, :geometry, :GEOID, :NAME, :STUSPS)
+
+#=
+source data has a column called nearby which is a boolean
+it is true if a Level 1 trauma center is within 50 miles of the county
+and counties with a Level 1 trauma center are always within 50 
+miles of themselves, so those counties are always true
+and that leads to duplicate rows, so we need to remove them
+the two boolean columns are used for coloring the counties
+=#
+for area in [df]
+    area.nearby[area.is_trauma_center] .= false
+end
+
+# join the county level data to the main plot
+conus = leftjoin(conus, df, on = :GEOID => :geoid)
+alaska = leftjoin(alaska, df, on = :GEOID => :geoid)
+hawaii = leftjoin(hawaii, df, on = :GEOID => :geoid)
+
+# convert back to GeoTables
+conus = GeoTable(conus)
+alaska = GeoTable(alaska)
+hawaii = GeoTable(hawaii)
+
+# create insets
+# to be used to rotate, scale and shift the inset's geometry counterclockwise
+alaska_inset = (alaska, 18, 0.25, -2_000_000, 420_000, "ccw")
+hawaii_inset = (hawaii, 24, 0.50, -1_250_000, 250_000, "ccw")
+# create the main plot
+
+
+
+
+plot_states_with_inset(conus, alaska_inset, hawaii_inset)
