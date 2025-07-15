@@ -3,9 +3,7 @@ using CairoMakie, GeoMakie, NaturalEarth
 coastlines = GeoMakie.coastlines()
 land = GeoMakie.land()
 
-
-
-# Basic figure container reation
+# Basic figure container creation
 f = Figure(size = (800, 600), backgroundcolor = :lightblue)
 
 # Elements positioned using array-like indexing
@@ -15,4 +13,4 @@ poly!(ga, coastlines, color = :black, label = "Coastlines")
 
 Legend(f[1, 2], ga)
 display(f)
-save("plot_1.pdf", f)
+# save("plot_1.pdf", f)

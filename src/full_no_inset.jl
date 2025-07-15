@@ -1,7 +1,7 @@
 using Pkg; Pkg.activate(@__DIR__)
 using CairoMakie, ColorSchemes, CommonMark, CoordRefSystems,
-      GeoDataFrames, GeoMakie, CSV, DataFrames, GeoIO, 
-      GeoStats, GeoTables, Humanize
+      GeoDataFrames, GeoMakie, CSV, DataFrames, 
+      GeoStats, Humanize
 import CoordRefSystems: Albers, EPSG, shift, Proj
 import GeoMakie: GeoAxis, poly!, Legend, Label, text!, lines!
 import Meshes: Proj
@@ -151,7 +151,6 @@ function plot_trauma_centers_geomakie()
     
     # County level data - load raw shapefile without projections
     tigerline_file = "data/2024_shp/cb_2024_us_county_500k.shp"
-    #data = DataFrame(GeoIO.load(tigerline_file))
     data = GeoDataFrames.read(tigerline_file)
     
     # Filter to valid states
@@ -160,13 +159,11 @@ function plot_trauma_centers_geomakie()
     # Split into regions
     conus_codes = setdiff(values(VALID_STATE_CODES), ["AK", "HI"])
     conus = subset(data, :STUSPS => ByRow(x -> x ∈ conus_codes))
-    alaska = subset(data, :STUSPS => ByRow(x -> x == "AK"))
-    hawaii = subset(data, :STUSPS => ByRow(x -> x == "HI"))
+
     
     # select the only the columns we need for the main plot
     select!(conus, :geometry, :GEOID, :NAME, :STUSPS)
-    select!(alaska, :geometry, :GEOID, :NAME, :STUSPS)
-    select!(hawaii, :geometry, :GEOID, :NAME, :STUSPS)
+
     
     #=
     source data has a column called nearby which is a boolean
@@ -176,16 +173,14 @@ function plot_trauma_centers_geomakie()
     and that leads to duplicate rows, so we need to remove them
     the two boolean columns are used for coloring the counties
     =#
-    for area in [df]
+    for area in [conus]
         area.nearby[area.is_trauma_center] .= false
     end
     
     # join the county level data to the main plot
     conus = leftjoin(conus, df, on = :GEOID => :geoid)
-    alaska = leftjoin(alaska, df, on = :GEOID => :geoid)
-    hawaii = leftjoin(hawaii, df, on = :GEOID => :geoid)
+
     
-    # Keep as DataFrames for plotting
     
     # Calculate statistics using conus data
     total_counties = size(conus, 1)
@@ -216,7 +211,6 @@ function plot_trauma_centers_geomakie()
     squib = "Of the $all_counties counties in the continental United States, $served_counties have a Level 1 trauma center within 50 miles, or $percentage_counties_served of the counties. This represents $served_population of the total population, or $percentage_served_population. Alaska has no Level 1 trauma centers and relies on air ambulance services to transport patients to Level 1 trauma centers in the lower 48 states. Hawaii has one Level 1 trauma center, in Honolulu, and relies on air ambulance services to transport patients from other islands."
     squib = hard_wrap(squib, 60)
     
-    # Define colors according to your specification
     BuYlRd = reverse(colorschemes[:RdYlBu])
     trauma_center_color = BuYlRd[1]  # :is_trauma_center == true
     nearby_color = BuYlRd[2]         # :nearby == true  
@@ -234,49 +228,13 @@ function plot_trauma_centers_geomakie()
         xticksvisible = false, yticksvisible = false,
         xticklabelsvisible = false, yticklabelsvisible = false,
     )
-    conus, alaska, hawaii = get_inset_states(tigerline_file)
-    hawaii = GeoTable(hawaii)
-    table = DataFrame(GeoIO.load(tigerline_file))
+
 
 # here is where the fix is
     poly!(ga, conus.geometry, color=conus.colores, strokecolor=:white, strokewidth=0.5)
     #poly!(ga, GeoMakie.to_multipoly.(table.geometry))
     display(f)
-    #poly!(ga, table.geometry, color=:transparent, strokecolor=:black, strokewidth=0.5)
-    table = subset(table, :STUSPS => ByRow(x -> x ∈ ["AK", "HI"]))
-    table = GeoTable(table)
-    table = Meshes.Proj(CoordRefSystems.EPSG{5070})(table)
-    display(table)
-    # Plot CONUS counties with colors
-    poly!(ga, conus.geometry, color=:transparent, strokecolor=:black, strokewidth=0.5)
-    display(f)
-    ga2 = GeoAxis(f[1, 1:3];
-    dest = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
-    aspect = DataAspect(),
-    xgridvisible = false, ygridvisible = false,
-    xticksvisible = false, yticksvisible = false,
-    xticklabelsvisible = false, yticklabelsvisible = false,
-)
-    # Plot Alaska counties with colors (using Alaska projection)
-    poly!(ga2, alaska.geometry, color=:transparent, strokecolor=:black, strokewidth=0.5)
-    ga3 = GeoAxis(f[1, 1:3];
-    dest = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
-    aspect = DataAspect(),
-    xgridvisible = false, ygridvisible = false,
-    xticksvisible = false, yticksvisible = false,
-    xticklabelsvisible = false, yticklabelsvisible = false,
-)
-    # Plot Hawaii counties with colors (using Hawaii projection)
-    poly!(ga3, hawaii.geometry, color=:transparent, strokecolor=:black, strokewidth=0.5)
     
-    # Legend to the right
-    legend = Legend(f[2, 3],
-        [PolyElement(color=trauma_center_color, strokecolor=:black),
-         PolyElement(color=nearby_color, strokecolor=:black),
-         PolyElement(color=other_color, strokecolor=:black)],
-        ["Trauma Centers", "Within 50 Miles", "Other Counties"],
-        "County Categories", halign=:right, fontsize=10
-    )
     
     # Title spanning full width
     Label(f[0, :], "US Counties: Level 1 Trauma Centers and Nearby Areas", fontsize = 20)
@@ -317,10 +275,7 @@ function plot_trauma_centers_geomakie()
     return f
 end
 
-# variables
 
-# blue for more, reddish for less
-BuRd_6 = reverse(colorschemes[:RdBu_6])
 
 # dataframes
 
@@ -363,52 +318,7 @@ squib = "Of the $all_counties counties in the continental United States, $served
 squib = hard_wrap(squib, 60)
 
 # geometries
-conus, alaska, hawaii = get_inset_states(tigerline_file)
 
-# convert to DataFrames for subsetting and joining
-conus = DataFrame(conus)
-alaska = DataFrame(alaska)
-hawaii = DataFrame(hawaii)
-for area in [conus, alaska, hawaii]
-    select!(area, :GEOID, :geometry)
-end
-
-conus = leftjoin(conus, df, on = :GEOID => :geoid)
-alaska = leftjoin(alaska, df, on = :GEOID => :geoid)
-hawaii = leftjoin(hawaii, df, on = :GEOID => :geoid)
-
-# colors
-trauma_center_color = BuRd_6[1]
-nearby_color = BuRd_6[2]
-other_color = BuRd_6[4]
-
-# Add color vectors as fields to each DataFrame before converting to GeoTable
-for area in [conus, alaska, hawaii]
-    # Create color vector based on trauma center status
-    area.colores = [area.is_trauma_center[i] === true ? trauma_center_color : 
-                    area.nearby[i] === true ? nearby_color : other_color 
-                    for i in eachindex(area.is_trauma_center)]
-end
-
-# Keep as DataFrames for plotting (don't convert to GeoTables)
-
-
-
-f = Figure(size = (1000, 700))
-
-# Main map in primary position
-
-ga = GeoAxis(f[1, 1:3];
-    dest               = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
-    aspect             = DataAspect(),
-    xgridvisible       = false, ygridvisible = false,
-    xticksvisible      = false, yticksvisible = false,
-    xticklabelsvisible = false, yticklabelsvisible = false,
-)
-
-poly!(ga, conus.geometry, color=conus.colores, strokecolor=:white, strokewidth=0.5)
-poly!(ga, alaska.geometry, color=alaska.colores, strokecolor=:white, strokewidth=0.5)
-poly!(ga, hawaii.geometry, color=hawaii.colores, strokecolor=:white, strokewidth=0.5)
 
 
 # Legend to the right
@@ -460,8 +370,3 @@ text!(f.scene, "50 mi",
 
 
 display(f)
-
-figure = Figure(size = (1000, 700))
-ga = GeoAxis(figure[1, 1:3])
-poly!(ga, GeoMakie.to_multipoly.(conus.geometry))
-display(figure)

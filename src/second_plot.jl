@@ -21,4 +21,4 @@ cb = Colorbar(f[1:3, 2], label = "Data Values")
 # Caption below
 Label(f[4, :], "Source: Chapman, D.L. (2025). Climate Forensics", fontsize = 12)
 display(f)
-# save("plot_3.pdf", f)
+save("plot_2.pdf", f)

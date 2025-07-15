@@ -1,12 +1,10 @@
-__precompile__(false)
-using Pkg; Pkg.activate(joinpath(@__DIR__, ".."))
+using Pkg
+Pkg.activate(@__DIR__)
 using CairoMakie, ColorSchemes, CommonMark, CoordRefSystems,
-       GeoDataFrames, GeoMakie, CSV, DataFrames, GeoIO, 
-       GeoStats, GeoTables, Humanize, GeometryOps, GeometryBasics
-import CoordRefSystems: Albers, EPSG, shift, Proj
-import GeoMakie: GeoAxis, poly!, Legend, Label, text!, lines!
-import Meshes: Proj
-import GeometryOps: transform
+       CSV, DataFrames, GeoIO, GeoDataFrames, GeoMakie,
+       GeoStats, GeoTables, Humanize, Meshes, StaticArrays, Tables
+import GeoStats: viz!
+using Unitful
 
 # constants
 const VALID_STATE_CODES = Dict(
@@ -24,7 +22,6 @@ const VALID_STATE_CODES = Dict(
     "Vermont" => "VT", "Virginia" => "VA", "Washington" => "WA", "West Virginia" => "WV",
     "Wisconsin" => "WI", "Wyoming" => "WY", "District of Columbia" => "DC"
 )
-const VALID_STATEFPS = ["01", "02", "04", "05", "06", "08", "09", "10", "11", "12", "13", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "44", "45", "46", "47", "48", "49", "50", "51", "53", "54", "55", "56"]
 
 # functions
 
@@ -96,7 +93,6 @@ end
 
 function format_table_as_text(headers::Vector{String}, rows::Vector{Vector{String}}, 
     padding::Int=2)
-    parser = Parser()
     all_rows = [headers; rows]
 
     # Calculate column widths
@@ -130,68 +126,61 @@ function format_table_as_text(headers::Vector{String}, rows::Vector{Vector{Strin
     return join([top_border, formatted_lines..., bottom_border], "\n")
 end
 
-function get_inset_states(shape_file::String)
+# Your working inset function
+function inset_state(state::GeoTable{<:GeometrySet}, rotation::Number, scale::Number, x_offset::Number, y_offset::Number, direction::String = "ccw")
+    θ = direction == "ccw" ? π/rotation : -π/rotation
+    R = Angle2d(θ)
+    S = Diagonal(SVector(scale, scale))
+    A = S * R
+    # increasing x moves the geometry to the right and increasing y lowers the geometry
+    b = SVector(x_offset, y_offset)
+    af = Affine(A, b)
+    transformed_geometry = af.(state.geometry)
+    return GeoTable(GeometrySet(transformed_geometry), vtable=state)
+end
+
+# Your working get_states function (adapted for counties)
+function get_counties(shape_file::String)
     conus_crs = CoordRefSystems.EPSG{5070}
     ak_crs = CoordRefSystems.EPSG{3338}
     projector_ak = Meshes.Proj(ak_crs)
-    hi_crs = CoordRefSystems.shift(Albers{13, 8, 18, CoordRefSystems.NAD83}, lonₒ=-157)
+    hi_crs = CoordRefSystems.shift(Albers{13, 8, 18, NAD83}, lonₒ=-157)
     projector_hi = Meshes.Proj(hi_crs)
     data = DataFrame(GeoIO.load(shape_file))
-    us_states = subset(data, :STUSPS => ByRow(x -> x ∈ values(VALID_STATE_CODES)))
-    conus = GeoTable(us_states[us_states.STUSPS .!= "AK" .&& us_states.STUSPS .!= "HI", :]) |> Meshes.Proj(conus_crs)
-    alaska = GeoTable(us_states[us_states.STUSPS .== "AK", :]) |> projector_ak  
-    hawaii = GeoTable(us_states[us_states.STUSPS .== "HI", :]) |> projector_hi
+    us_counties = subset(data, :STUSPS => ByRow(x -> x ∈ values(VALID_STATE_CODES)))
+    conus = GeoTable(us_counties[us_counties.STUSPS .!= "AK" .&& us_counties.STUSPS .!= "HI", :]) |> Meshes.Proj(conus_crs)
+    alaska = GeoTable(us_counties[us_counties.STUSPS .== "AK", :]) |> projector_ak  
+    hawaii = GeoTable(us_counties[us_counties.STUSPS .== "HI", :]) |> projector_hi
     return conus, alaska, hawaii
 end
 
 function plot_trauma_centers_geomakie()
-    # Use data from full_plot.jl
+    # Load trauma center data
     df = CSV.read("data/trauma_centers.csv", DataFrame)
-    # source data has the geoid as an integer, but we will be joining on strings
     df.geoid = lpad.(df.geoid, 5, "0")
     select!(df, :geoid, :population, :is_trauma_center, :nearby)
     
-    # County level data - load raw shapefile and apply transformations manually
+    # Clean up nearby data
+    df.nearby[df.is_trauma_center] .= false
+    
+    # County level data using your working pattern
     tigerline_file = "data/2024_shp/cb_2024_us_county_500k.shp"
-    data = DataFrame(GeoDataFrames.read(tigerline_file))
+    conus_geo, alaska_geo, hawaii_geo = get_counties(tigerline_file)
     
-    # Filter to valid states
-    data = subset(data, :STUSPS => ByRow(x -> x ∈ values(VALID_STATE_CODES)))
+    # Convert to DataFrames for joining
+    conus_df = DataFrame(conus_geo)
+    alaska_df = DataFrame(alaska_geo)
+    hawaii_df = DataFrame(hawaii_geo)
     
-    # Split into regions
-    conus_codes = setdiff(values(VALID_STATE_CODES), ["AK", "HI"])
-    conus = subset(data, :STUSPS => ByRow(x -> x ∈ conus_codes))
-    alaska = subset(data, :STUSPS => ByRow(x -> x == "AK"))
-    hawaii = subset(data, :STUSPS => ByRow(x -> x == "HI"))
-    
-    # select the only the columns we need for the main plot
-    select!(conus, :geometry, :GEOID, :NAME, :STUSPS)
-    select!(alaska, :geometry, :GEOID, :NAME, :STUSPS)
-    select!(hawaii, :geometry, :GEOID, :NAME, :STUSPS)
-    
-    #=
-    source data has a column called nearby which is a boolean
-    it is true if a Level 1 trauma center is within 50 miles of the county
-    and counties with a Level 1 trauma center are always within 50 
-    miles of themselves, so those counties are always true
-    and that leads to duplicate rows, so we need to remove them
-    the two boolean columns are used for coloring the counties
-    =#
-    for area in [df]
-        area.nearby[area.is_trauma_center] .= false
-    end
-    
-    # join the county level data to the main plot
-    conus = leftjoin(conus, df, on = :GEOID => :geoid)
-    alaska = leftjoin(alaska, df, on = :GEOID => :geoid)
-    hawaii = leftjoin(hawaii, df, on = :GEOID => :geoid)
-    
-    # Keep as DataFrames for plotting
+    # Join trauma data
+    conus_df = leftjoin(conus_df, df, on = :GEOID => :geoid)
+    alaska_df = leftjoin(alaska_df, df, on = :GEOID => :geoid)
+    hawaii_df = leftjoin(hawaii_df, df, on = :GEOID => :geoid)
     
     # Calculate statistics using conus data
-    total_counties = size(conus, 1)
-    trauma_counties = sum(skipmissing(conus.is_trauma_center))
-    nearby_counties = sum(skipmissing(conus.nearby))
+    total_counties = size(conus_df, 1)
+    trauma_counties = sum(skipmissing(conus_df.is_trauma_center))
+    nearby_counties = sum(skipmissing(conus_df.nearby))
     other_counties = total_counties - trauma_counties - nearby_counties
     
     # Format statistics for display
@@ -200,12 +189,12 @@ function plot_trauma_centers_geomakie()
     nearby_counties_fmt = lpad(with_commas(nearby_counties), 12)
     other_counties_fmt = lpad(with_commas(other_counties), 12)
     
-    served = subset(conus, [:is_trauma_center, :nearby] => ByRow((tc, nb) -> (tc === true) || (nb === true)))
-    percentage_counties_served = percent(nrow(served) / nrow(conus))
-    percentage_served_population = percent(Float64(sum(skipmissing(served.population)) / sum(skipmissing(conus.population))))
-    total_population = with_commas(sum(skipmissing(conus.population)))
+    served = subset(conus_df, [:is_trauma_center, :nearby] => ByRow((tc, nb) -> (tc === true) || (nb === true)))
+    percentage_counties_served = percent(nrow(served) / nrow(conus_df))
+    percentage_served_population = percent(Float64(sum(skipmissing(served.population)) / sum(skipmissing(conus_df.population))))
+    total_population = with_commas(sum(skipmissing(conus_df.population)))
     served_population = with_commas(sum(skipmissing(served.population)))
-    all_counties = with_commas(nrow(conus))
+    all_counties = with_commas(nrow(conus_df))
     served_counties = with_commas(nrow(served))
     
     # Create table
@@ -217,101 +206,50 @@ function plot_trauma_centers_geomakie()
     squib = "Of the $all_counties counties in the continental United States, $served_counties have a Level 1 trauma center within 50 miles, or $percentage_counties_served of the counties. This represents $served_population of the total population, or $percentage_served_population. Alaska has no Level 1 trauma centers and relies on air ambulance services to transport patients to Level 1 trauma centers in the lower 48 states. Hawaii has one Level 1 trauma center, in Honolulu, and relies on air ambulance services to transport patients from other islands."
     squib = hard_wrap(squib, 60)
     
-    # Define colors according to your specification
+    # Define colors     
     BuYlRd = reverse(colorschemes[:RdYlBu])
     trauma_center_color = BuYlRd[1]  # :is_trauma_center == true
     nearby_color = BuYlRd[2]         # :nearby == true  
-    other_color = BuYlRd[5]          # :nearby == false
+    other_color = BuYlRd[7]          # :nearby == false
     
-    # Add color vectors as fields to each DataFrame
-    for area in [conus, alaska, hawaii]
-        # Create color vector based on trauma center status
-        area.colores = [area.is_trauma_center[i] === true ? trauma_center_color : 
-                        area.nearby[i] === true ? nearby_color : other_color 
-                        for i in eachindex(area.is_trauma_center)]
-    end
+    # Plot using viz! with direct color specification instead of accessing geotable attributes
+    # Create color vectors directly from the DataFrames
+    conus_colors = [conus_df.is_trauma_center[i] === true ? trauma_center_color : 
+                   conus_df.nearby[i] === true ? nearby_color : other_color 
+                   for i in eachindex(conus_df.is_trauma_center)]
     
-    # Create figure with larger size
+    alaska_colors = [alaska_df.is_trauma_center[i] === true ? trauma_center_color : 
+                    alaska_df.nearby[i] === true ? nearby_color : other_color 
+                    for i in eachindex(alaska_df.is_trauma_center)]
+    
+    hawaii_colors = [hawaii_df.is_trauma_center[i] === true ? trauma_center_color : 
+                    hawaii_df.nearby[i] === true ? nearby_color : other_color 
+                    for i in eachindex(hawaii_df.is_trauma_center)]
+    
+    # Create insets using the original GeoTables (without color data)
+    alaska_inset = inset_state(alaska_geo, 18, 0.25, -2_000_000.0, 420_000.0)
+    hawaii_inset = inset_state(hawaii_geo, 24, 0.5, -1_250_000.0, 250_000.0)
+    
+
+    
+
+    # Create figure with proper aspect control
     f = Figure(size = (1400, 900))
     
-    # Main map using GeoAxis with dest projection for geographic coordinates
-    ga = GeoAxis(f[1, 1:3];
-        dest = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
-        aspect = DataAspect(),
-        xgridvisible = false, ygridvisible = false,
-        xticksvisible = false, yticksvisible = false,
-        xticklabelsvisible = false, yticklabelsvisible = false,
-    )
+    # Create an Axis instead of GeoAxis for better control
+    ax = Axis(f[1, 1:3], aspect = DataAspect(),
+              xgridvisible = false, ygridvisible = false,
+              xticksvisible = false, yticksvisible = false,
+              xticks = nothing, yticks = nothing,
+              xticklabelsvisible = false, yticklabelsvisible = false,
+              leftspinevisible = false, rightspinevisible = false,
+              topspinevisible = false, bottomspinevisible = false)
     
-    # Create inset transformations for Alaska and Hawaii using manual coordinate transformation
-    # Helper function to transform a single ring of coordinates
-    function transform_ring(ring, scale, θ, offset)
-        # Scale coordinates
-        scaled = ring .* scale
-        # Create rotation matrix
-        rotation_matrix = [cos(θ) -sin(θ); sin(θ) cos(θ)]
-        # Apply rotation to each point individually
-        rotated = [rotation_matrix * point for point in scaled]
-        # Translate to inset position
-        return [point .+ offset for point in rotated]
-    end
+    # Plot using viz! with colors passed directly
+    viz!(ax, conus_geo.geometry, color = conus_colors, strokecolor = :white, strokewidth = 0.5)
+    viz!(ax, alaska_inset.geometry, color = alaska_colors, strokecolor = :white, strokewidth = 0.5)
+    viz!(ax, hawaii_inset.geometry, color = hawaii_colors, strokecolor = :white, strokewidth = 0.5)
     
-    # Function to handle both Polygon and MultiPolygon coordinates
-    function transform_geom_coords(coords, scale, θ, offset)
-        # For Polygon: coords is Vector{Vector{Float64}} (one ring)
-        if eltype(coords) <: AbstractVector{<:Real}
-            return [transform_ring(coords, scale, θ, offset)]
-        # For MultiPolygon: coords is Vector{Vector{Vector{Float64}}} (multiple rings)
-        elseif eltype(coords) <: AbstractVector
-            return [transform_ring(ring, scale, θ, offset) for ring in coords]
-        else
-            return []
-        end
-    end
-    
-    # Apply transformations to geometries by extracting coordinates
-    alaska_inset_geoms = []
-    for geom in alaska.geometry
-        coords = GeoInterface.coordinates(geom)
-        if !isempty(coords)
-            # Transform coordinates for Alaska (scale 0.25, rotate π/18, offset [-2_000_000, 420_000])
-            transformed = transform_geom_coords(coords, 0.25, π/18, [-2_000_000.0, 420_000.0])
-            if !isempty(transformed)
-                # Create a simple polygon from transformed coordinates
-                push!(alaska_inset_geoms, GeometryBasics.Polygon(transformed))
-            end
-        end
-    end
-    
-    hawaii_inset_geoms = []
-    for geom in hawaii.geometry
-        coords = GeoInterface.coordinates(geom)
-        if !isempty(coords)
-            # Transform coordinates for Hawaii (scale 0.5, rotate π/24, offset [-1_250_000, 250_000])
-            transformed = transform_geom_coords(coords, 0.5, π/24, [-1_250_000.0, 250_000.0])
-            if !isempty(transformed)
-                # Create a simple polygon from transformed coordinates
-                push!(hawaii_inset_geoms, GeometryBasics.Polygon(transformed))
-            end
-        end
-    end
-    
-    # Plot CONUS counties with colors
-    poly!(ga, conus.geometry, color=conus.colores, strokecolor=:white, strokewidth=0.5)
-    
-    # Plot Alaska inset with colors
-    for (i, geom) in enumerate(alaska_inset_geoms)
-        if i <= length(alaska.colores)
-            poly!(ga, geom, color=alaska.colores[i], strokecolor=:white, strokewidth=0.5)
-        end
-    end
-    
-    # Plot Hawaii inset with colors
-    for (i, geom) in enumerate(hawaii_inset_geoms)
-        if i <= length(hawaii.colores)
-            poly!(ga, geom, color=hawaii.colores[i], strokecolor=:white, strokewidth=0.5)
-        end
-    end
     
     # Legend to the right
     legend = Legend(f[2, 3],

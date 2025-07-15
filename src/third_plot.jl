@@ -1,9 +1,11 @@
+using Pkg
+Pkg.activate(@__DIR__)
+
 using CairoMakie, GeoMakie, NaturalEarth
 
 coastlines = GeoMakie.coastlines()
 land = GeoMakie.land()
-# Fixed version matching your code structure
-using CairoMakie, GeoMakie, NaturalEarth
+
 
 # Get the required data
 land = GeoMakie.land()
