@@ -1,5 +1,5 @@
-using Pkg
-Pkg.activate(@__DIR__)
+# using Pkg
+# Pkg.activate(@__DIR__)
 using CairoMakie, ColorSchemes, CommonMark, CoordRefSystems,
        CSV, DataFrames, GeoIO, GeoDataFrames, GeoMakie,
        GeoStats, GeoTables, Humanize, Meshes, StaticArrays, Tables
@@ -127,15 +127,54 @@ function format_table_as_text(headers::Vector{String}, rows::Vector{Vector{Strin
 end
 
 # Your working inset function
-function inset_state(state::GeoTable{<:GeometrySet}, rotation::Number, scale::Number, x_offset::Number, y_offset::Number, direction::String = "ccw")
+function inset_state(
+    state::GeoTable{<:GeometrySet},
+    rotation::Number,
+    scale::Union{Number, Unitful.Quantity},
+    x_offset::Union{Number, Unitful.Quantity},
+    y_offset::Union{Number, Unitful.Quantity},
+    direction::String = "ccw"
+)
     θ = direction == "ccw" ? π/rotation : -π/rotation
-    R = Angle2d(θ)
     S = Diagonal(SVector(scale, scale))
+    R = [cos(θ) -sin(θ); sin(θ) cos(θ)]
     A = S * R
-    # increasing x moves the geometry to the right and increasing y lowers the geometry
     b = SVector(x_offset, y_offset)
     af = Affine(A, b)
-    transformed_geometry = af.(state.geometry)
+
+    # Helper to transform a single geometry object
+    function transform_geom(coords)
+        # Recursively handle nested structures (MultiPolygons, etc.)
+        if eltype(coords) <: AbstractVector
+            return [transform_geom(sub) for sub in coords]
+        else
+            # Flat ring: transform each point, handling variable coordinate counts
+            return [begin
+                c = Tuple(p)
+                if length(c) >= 2
+                    # Create SVector with compatible types
+                    T = promote_type(typeof(c[1]), typeof(x_offset))
+                    x = T(c[1])
+                    y = T(c[2])
+                    af(SVector(x, y))
+                elseif length(c) == 1
+                    T = promote_type(typeof(c[1]), typeof(x_offset))
+                    x = T(c[1])
+                    y = zero(T)
+                    af(SVector(x, y))
+                else
+                    p  # Return original if no coordinates
+                end
+            end for p in coords]
+        end
+    end
+
+    # Rebuild geometry objects of the same type as original
+    transformed_geometry = map(state.geometry) do geom
+        coords = GeoInterface.coordinates(geom)
+        new_coords = transform_geom(coords)
+        typeof(geom)(new_coords)
+    end
     return GeoTable(GeometrySet(transformed_geometry), vtable=state)
 end
 
@@ -226,9 +265,45 @@ function plot_trauma_centers_geomakie()
                     hawaii_df.nearby[i] === true ? nearby_color : other_color 
                     for i in eachindex(hawaii_df.is_trauma_center)]
     
-    # Create insets using the original GeoTables (without color data)
-    alaska_inset = inset_state(alaska_geo, 18, 0.25, -2_000_000.0, 420_000.0)
-    hawaii_inset = inset_state(hawaii_geo, 24, 0.5, -1_250_000.0, 250_000.0)
+    # Create insets using manual coordinate transformation (simpler approach)
+    # We'll transform the coordinates manually and create simple polygons
+    alaska_inset_geoms = []
+    for geom in alaska_geo.geometry
+        coords = GeoInterface.coordinates(geom)
+        if !isempty(coords)
+            transformed = transform_geom_coords(coords, 0.25, π/18, [-2_000_000.0, 420_000.0])
+            if !isempty(transformed)
+                if eltype(transformed) <: AbstractVector{<:Real}
+                    rings = to_points.(transformed)
+                    push!(alaska_inset_geoms, GeometryBasics.Polygon(rings[1], rings[2:end]))
+                elseif eltype(transformed) <: AbstractVector
+                    for poly in transformed
+                        rings = to_points.(poly)
+                        push!(alaska_inset_geoms, GeometryBasics.Polygon(rings[1], rings[2:end]))
+                    end
+                end
+            end
+        end
+    end
+    
+    hawaii_inset_geoms = []
+    for geom in hawaii_geo.geometry
+        coords = GeoInterface.coordinates(geom)
+        if !isempty(coords)
+            transformed = transform_geom_coords(coords, 0.5, π/24, [-1_250_000.0, 250_000.0])
+            if !isempty(transformed)
+                if eltype(transformed) <: AbstractVector{<:Real}
+                    rings = to_points.(transformed)
+                    push!(hawaii_inset_geoms, GeometryBasics.Polygon(rings[1], rings[2:end]))
+                elseif eltype(transformed) <: AbstractVector
+                    for poly in transformed
+                        rings = to_points.(poly)
+                        push!(hawaii_inset_geoms, GeometryBasics.Polygon(rings[1], rings[2:end]))
+                    end
+                end
+            end
+        end
+    end
     
 
     
@@ -247,8 +322,20 @@ function plot_trauma_centers_geomakie()
     
     # Plot using viz! with colors passed directly
     viz!(ax, conus_geo.geometry, color = conus_colors, strokecolor = :white, strokewidth = 0.5)
-    viz!(ax, alaska_inset.geometry, color = alaska_colors, strokecolor = :white, strokewidth = 0.5)
-    viz!(ax, hawaii_inset.geometry, color = hawaii_colors, strokecolor = :white, strokewidth = 0.5)
+    
+    # Plot Alaska inset with colors
+    for (i, geom) in enumerate(alaska_inset_geoms)
+        if i <= length(alaska_colors)
+            viz!(ax, geom, color = alaska_colors[i], strokecolor = :white, strokewidth = 0.5)
+        end
+    end
+    
+    # Plot Hawaii inset with colors
+    for (i, geom) in enumerate(hawaii_inset_geoms)
+        if i <= length(hawaii_colors)
+            viz!(ax, geom, color = hawaii_colors[i], strokecolor = :white, strokewidth = 0.5)
+        end
+    end
     
     
     # Legend to the right

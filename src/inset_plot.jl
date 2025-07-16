@@ -7,19 +7,61 @@ include("src/inset_colors.jl")
 include("src/inset_geo.jl")
 
 
-# Create figure with proper aspect control
 f = Figure(size = (1400, 900))
-    
-# Create an Axis instead of GeoAxis for better control
-ga = GeoAxis(f[1, 1:3], aspect = DataAspect(),
+
+    dest = conus_crs,
     xgridvisible = false, ygridvisible = false,
     xticksvisible = false, yticksvisible = false,
     xticklabelsvisible = false, yticklabelsvisible = false)
+  
     
-poly!(ga, conus_geo.geometry, color = conus_geo.colores, strokecolor = :white, strokewidth = 0.5)
-viz!(ga, alaska_inset.geometry, color = alaska_colors, strokecolor = :white, strokewidth = 0.5)
-viz!(ga, hawaii_inset.geometry, color = hawaii_colors, strokecolor = :white, strokewidth = 0.5)  
+# poly!(ga, conus.geometry, color = conus.colores, strokecolor = :white, strokewidth = 0.5)
+# poly!(ga, alaska.geometry, color = alaska.colores, strokecolor = :white, strokewidth = 0.5)
+# poly!(ga, hawaii.geometry, color = hawaii.colores, strokecolor = :black, strokewidth = 0.5)  
 
 
+ga = GeoAxis(f[1, 1:3], aspect = DataAspect(),
+    dest = conus_crs,
+    xgridvisible = false, ygridvisible = false,
+    xticksvisible = false, yticksvisible = false,
+    xticklabelsvisible = false, yticklabelsvisible = false)
+  
+    
+# Inset: Alaska in bottom-left, 25% size of parent
+alaska_inset = GeoAxis(fig[1, 1], width=Relative(0.75), height=Relative(0.75),
+halign=-1, valign=0.74, dest=alaska_crs)
+hidedecorations!(alaska_inset)
+poly!(alaska_inset, alaska.geometry, color = alaska.colores, strokecolor = :white, strokewidth = 0.5)
+
+    
+# Inset: Hawaii in bottom-right, 18% size of parent
+hawaii_inset = GeoAxis(fig[1, 1], width=Relative(0.5), height=Relative(0.5),
+halign=-0.3, valign=0.3, dest=hawaii_crs)
+hidedecorations!(hawaii_inset)
+poly!(hawaii_inset, hawaii.geometry, color = hawaii.colores, strokecolor = :white, strokewidth = 0.5)
+
+poly!(ga, conus.geometry, color = conus.colores, strokecolor = :white, strokewidth = 0.5)
 
 display(f)
+
+using GeoMakie, CairoMakie
+
+fig = Figure(size = (1200, 800))
+# Main conterminous US map
+main_ax = GeoAxis(fig[1, 1]; dest=conus_crs)
+# Plot the main map
+poly!(main_ax, conus.geometry, color = conus.colores, strokecolor = :white, strokewidth = 0.5)
+hidedecorations!(main_ax)
+# Inset: Alaska in bottom-left, 25% size of parent
+alaska_inset = GeoAxis(fig[1, 1], width=Relative(0.75), height=Relative(0.75),
+                       halign=-1, valign=0.74, dest=alaska_crs)
+hidedecorations!(alaska_inset)
+poly!(alaska_inset, alaska.geometry, color = alaska.colores, strokecolor = :white, strokewidth = 0.5)
+
+# Inset: Hawaii in bottom-right, 18% size of parent
+hawaii_inset = GeoAxis(fig[1, 1], width=Relative(0.5), height=Relative(0.5),
+                       halign=-0.3, valign=0.3, dest=hawaii_crs)
+hidedecorations!(hawaii_inset)
+poly!(hawaii_inset, hawaii.geometry, color = hawaii.colores, strokecolor = :white, strokewidth = 0.5)
+
+fig

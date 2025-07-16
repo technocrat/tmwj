@@ -99,27 +99,107 @@ function format_table_as_text(headers::Vector{String}, rows::Vector{Vector{Strin
     return join([top_border, formatted_lines..., bottom_border], "\n")
 end
 
-function inset_state(state::GeoTable{<:GeometrySet}, rotation::Number, scale::Number, x_offset::Number, y_offset::Number, direction::String = "ccw")
-    θ = direction == "ccw" ? π/rotation : -π/rotation
-    R = Angle2d(θ)
-    S = Diagonal(SVector(scale, scale))
-    A = S * R
-    # increasing x moves the geometry to the right and increasing y lowers the geometry
-    b = SVector(x_offset, y_offset)
-    af = Affine(A, b)
-    transformed_geometry = af.(state.geometry)
-    return GeoTable(GeometrySet(transformed_geometry), vtable=state)
+# Simple function to transform Hawaii to lat/lon coordinates for inset placement
+function transform_hawaii_to_latlon(hawaii_geoms, scale=0.3, offset_lon=-115.0, offset_lat=25.0)
+    transformed_geoms = map(hawaii_geoms) do geom
+        try
+            coords = GeoInterface.coordinates(geom)
+            
+            # Handle both Polygon and MultiPolygon
+            if ArchGDAL.getgeomtype(geom) == ArchGDAL.wkbMultiPolygon
+                exterior_ring = coords[1][1]
+            else
+                exterior_ring = coords[1]
+            end
+            
+            # Transform coordinates
+            new_coords = map(exterior_ring) do coord_pair
+                lon, lat = coord_pair[1], coord_pair[2]
+                
+                # Center Hawaii around its approximate center
+                centered_lon = lon - (-156.0)  # Hawaii center longitude
+                centered_lat = lat - 19.5      # Hawaii center latitude
+                
+                # Scale and place in new location
+                new_lon = centered_lon * scale + offset_lon
+                new_lat = centered_lat * scale + offset_lat
+                
+                [new_lon, new_lat]
+            end
+            
+            # Create new geometry
+            coord_string = join(["$(coord[1]) $(coord[2])" for coord in new_coords], ", ")
+            new_wkt = "POLYGON(($coord_string))"
+            ArchGDAL.fromWKT(new_wkt)
+            
+        catch e
+            println("Error transforming Hawaii geometry: ", e)
+            geom  # Return original on error
+        end
+    end
+    
+    return transformed_geoms
 end
 
-function get_counties(shape_file::String)
-    ak_crs = CoordRefSystems.EPSG{3338}
-    projector_ak = Proj(ak_crs)
-    hi_crs = CoordRefSystems.shift(Albers{13, 8, 18, NAD83}, lonₒ=-157)
-    projector_hi = Proj(hi_crs)
-    data = DataFrame(GeoIO.load(shape_file))
-    alaska = GeoTable(data[data.STUSPS .== "AK", :]) |> projector_ak  
-    hawaii = GeoTable(data[data.STUSPS .== "HI", :]) |> projector_hi
-    alaska = DataFrame(alaska)
-    hawaii = DataFrame(hawaii)
-    return alaska, hawaii
+# Function to transform Alaska to lat/lon coordinates for inset placement
+function transform_alaska_to_latlon(alaska_geoms, scale=0.25, offset_lon=-115.0, offset_lat=35.0)
+    transformed_geoms = map(alaska_geoms) do geom
+        try
+            coords = GeoInterface.coordinates(geom)
+            
+            # Handle both Polygon and MultiPolygon
+            if ArchGDAL.getgeomtype(geom) == ArchGDAL.wkbMultiPolygon
+                exterior_ring = coords[1][1]
+            else
+                exterior_ring = coords[1]
+            end
+            
+            # Transform coordinates
+            new_coords = map(exterior_ring) do coord_pair
+                lon, lat = coord_pair[1], coord_pair[2]
+                
+                # Center Alaska around its approximate center
+                centered_lon = lon - (-154.0)  # Alaska center longitude (approximate)
+                centered_lat = lat - 64.0      # Alaska center latitude (approximate)
+                
+                # Scale and place in new location
+                new_lon = centered_lon * scale + offset_lon
+                new_lat = centered_lat * scale + offset_lat
+                
+                [new_lon, new_lat]
+            end
+            
+            # Create new geometry
+            coord_string = join(["$(coord[1]) $(coord[2])" for coord in new_coords], ", ")
+            new_wkt = "POLYGON(($coord_string))"
+            ArchGDAL.fromWKT(new_wkt)
+            
+        catch e
+            println("Error transforming Alaska geometry: ", e)
+            geom  # Return original on error
+        end
+    end
+    
+    return transformed_geoms
 end
+
+function check_alaska_range(geoms)
+    all_coords = []
+    for geom in geoms[1:min(10, length(geoms))]
+        try
+            coords = GeoInterface.coordinates(geom)[1]
+            append!(all_coords, coords)
+        catch
+            continue
+        end
+    end
+    
+    if !isempty(all_coords)
+        x_coords = [c[1] for c in all_coords]
+        y_coords = [c[2] for c in all_coords]
+        println("Alaska inset X range: ", extrema(x_coords))
+        println("Alaska inset Y range: ", extrema(y_coords))
+    end
+end
+
+check_alaska_range(alaska.geometry)

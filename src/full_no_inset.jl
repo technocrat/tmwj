@@ -1,7 +1,7 @@
 using Pkg; Pkg.activate(@__DIR__)
 using CairoMakie, ColorSchemes, CommonMark, CoordRefSystems,
-      GeoDataFrames, GeoMakie, CSV, DataFrames, 
-      GeoStats, Humanize
+      GeoDataFrames, GeoMakie, CSV, DataFrames, GeoIO,
+      GeoStats, GeoTables, Humanize
 import CoordRefSystems: Albers, EPSG, shift, Proj
 import GeoMakie: GeoAxis, poly!, Legend, Label, text!, lines!
 import Meshes: Proj
@@ -142,7 +142,7 @@ function get_inset_states(shape_file::String)
     return conus, alaska, hawaii
 end
 
-function plot_trauma_centers_geomakie()
+# function plot_trauma_centers_geomakie()
     # Use data from full_plot.jl
     df = CSV.read("data/trauma_centers.csv", DataFrame)
     # source data has the geoid as an integer, but we will be joining on strings
@@ -275,8 +275,31 @@ function plot_trauma_centers_geomakie()
     return f
 end
 
+function get_counties(shape_file::String)
+    conus_crs = CoordRefSystems.EPSG{5070}
+    ak_crs = CoordRefSystems.EPSG{3338}
+    projector_ak = Proj(ak_crs)
+    hi_crs = CoordRefSystems.shift(Albers{13, 8, 18, NAD83}, lonₒ=-157)
+    projector_hi = Proj(hi_crs)
+    data = DataFrame(GeoIO.load(shape_file))
+    us_counties = subset(data, :STUSPS => ByRow(x -> x ∈ values(VALID_STATE_CODES)))
+    conus = GeoTable(us_counties[us_counties.STUSPS .!= "AK" .&& us_counties.STUSPS .!= "HI", :]) |> Proj(conus_crs)
+    alaska = GeoTable(us_counties[us_counties.STUSPS .== "AK", :]) |> projector_ak  
+    hawaii = GeoTable(us_counties[us_counties.STUSPS .== "HI", :]) |> projector_hi
+    return conus, alaska, hawaii
+end
+conus_discard, alaska, hawaii = get_counties(tigerline_file)
+julia# Add categorical color column to DataFrames
+for area_df in [alaska, hawaii]
+    area_df.color_category = [area_df.is_trauma_center[i] === true ? "trauma" : 
+                             area_df.nearby[i] === true ? "nearby" : "other" 
+                             for i in eachindex(area_df.is_trauma_center)]
+end
 
-
+# Then in viz!:
+viz!(ga, alaska_inset.geometry, color = alaska_inset.color_category,
+     colormap = Dict("trauma" => trauma_center_color, "nearby" => nearby_color, "other" => other_color),
+     strokecolor = :white, strokewidth = 0.5)
 # dataframes
 
 # tigerline data
@@ -367,6 +390,13 @@ text!(f.scene, "50 mi",
       space=:relative,
       align=(:center, :top), 
       fontsize=14, color=:black)
+
+
+
+
+
+
+
 
 
 display(f)

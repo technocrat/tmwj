@@ -674,9 +674,9 @@ version = "1.15.1"
 
 [[deps.DifferentiationInterface]]
 deps = ["ADTypes", "LinearAlgebra"]
-git-tree-sha1 = "c092fd1dd0d94e609cd0d29e13897b2825c804bb"
+git-tree-sha1 = "f620da805b82bec64ab4d5f881c7592c82dbc08a"
 uuid = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
-version = "0.7.2"
+version = "0.7.3"
 
     [deps.DifferentiationInterface.extensions]
     DifferentiationInterfaceChainRulesCoreExt = "ChainRulesCore"
@@ -952,9 +952,9 @@ version = "1.11.0"
 
 [[deps.GDAL_jll]]
 deps = ["Arrow_jll", "Artifacts", "Blosc_jll", "Expat_jll", "GEOS_jll", "HDF4_jll", "HDF5_jll", "JLLWrappers", "LERC_jll", "LibCURL_jll", "LibPQ_jll", "Libdl", "Libtiff_jll", "Lz4_jll", "NetCDF_jll", "OpenJpeg_jll", "PCRE2_jll", "PROJ_jll", "Qhull_jll", "SQLite_jll", "XML2_jll", "XZ_jll", "Zlib_jll", "Zstd_jll", "libgeotiff_jll", "libpng_jll", "libwebp_jll", "muparser_jll"]
-git-tree-sha1 = "04020fb34b3a9fc06cc2fcdf84bfefcc307eac11"
+git-tree-sha1 = "b481f0406aa3ac44cef6d7fb98236b2b4a028316"
 uuid = "a7073274-a066-55f0-b90d-d619367d196c"
-version = "303.1100.100+0"
+version = "303.1100.300+0"
 
 [[deps.GEOS_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
