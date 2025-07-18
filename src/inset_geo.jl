@@ -19,14 +19,5 @@ select!(conus, :geometry, :GEOID, :population, :colores)
 select!(alaska, :geometry, :GEOID, :population, :colores)
 select!(hawaii, :geometry, :GEOID, :population, :colores)
 
-conus_meters = transform_to_meters(conus.geometry)
-# Position Alaska in the lower left with more space, larger scale
-alaska.geometry = transform_alaska_to_latlon_fixed(alaska.geometry, 0.6, -125.0, 25.0)
-# Make Hawaii bigger and position it better in the Pacific
-hawaii.geometry = transform_hawaii_to_latlon(hawaii.geometry, 0.8, -125.0, 22.0)
-
-
-
-
 
 
