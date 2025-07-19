@@ -37,8 +37,7 @@ conus = subset(df, :State => ByRow(x -> x ∉ ak_hi))
 
 fig = Figure(size = (1600,800), fontsize = 24)
 ga = GeoAxis(fig[1, 1];
-dest = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5
-+lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
+dest = "+proj=aea +lat_0=37.5 +lon_0=-96 +lat_1=29.5 +lat_2=45.5 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs",
 xgridvisible       = false, ygridvisible = false,
 xticksvisible      = false, yticksvisible = false,
 xticklabelsvisible = false, yticklabelsvisible = false) 
