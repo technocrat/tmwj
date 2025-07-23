@@ -1,0 +1,15 @@
+---
+title: "A julia engine notebook"
+engine: julia
+---
+
+```{julia}
+using Plots
+
+plot(sin, 
+     x->sin(2x), 
+     0, 
+     2π, 
+     leg=false, 
+     fill=(0,:lavender))
+```

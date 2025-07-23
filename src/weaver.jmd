@@ -1,0 +1,14 @@
+---
+title : Intro to Weave.jl with Plots
+author : Anonymous
+date : 06th Feb 2019
+---# Intro## Plot` ``{julia;}
+using Plots, DataFrames
+plot(rand(5,5), linewidth=2, title="My Plot", size = (500, 200))
+` ``
+## Some computational results` ``julia
+rand(2, 3)
+` ``
+` ``julia
+DataFrame(rand(2, 3))
+` ``

@@ -1,0 +1,36 @@
+\newpage
+
+\bigskip
+\begin{lstlisting}[language=JuliaLocal, style=julia, texcl=true]
+# Calculate and display the sum of squares from 1 to 10
+numbers = 1:10
+sum_of_squares = sum(x^2 for x in numbers)
+println("Sum of squares from 1 to 10 = ", sum_of_squares)
+using Plots
+
+x = 1:0.1:10
+y = sin.(x)
+plot(x, y, label="sin(x)", xlabel="x", ylabel="sin(x)", title="Plot of sin(x)")
+using DataFrames
+
+# Create a simple DataFrame
+df = DataFrame(Name=["Alice", "Bob", "Carol"], Age=[25, 31, 47])
+display(df)
+
+using LaTeXStrings
+
+# Create a LaTeX equation
+tequation = L" \lim_{n \to \infty} \left( \sum_{k=1}^n \frac{1}{k^2} - \int_1^n \frac{1}{x^2} , dx \right) = 1 - \frac{\pi^2}{6} "
+display(tequation)
+\end{lstlisting}
+
+\begingroup
+
+\fontsize{10pt}{12pt}\selectfont
+
+\begin{verbatim}
+Sum of squares from 1 to 10 = 385
+
+\end{verbatim}
+
+\endgroup
